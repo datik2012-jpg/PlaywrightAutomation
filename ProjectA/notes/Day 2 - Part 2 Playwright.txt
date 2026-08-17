@@ -856,3 +856,710 @@ Answer like you're sitting in the technical interview.
 
 
 
+Answer: To add a wait 10 min for every click is temporary solution , i would suggets to investigate the issue deeper in the server and understand wjay happens and why  the loading takes time, of course related to the test itself need to remove wait and add to be visible 
+
+
+Yes — good thinking. You actually identified two different problems, which is stronger than just saying “don't use sleep.”
+
+One correction: the interviewer said sleep(10) meaning 10 seconds, not 10 minutes. 🙂
+
+Your answer: 8/10
+
+You correctly said:
+
+❌ Hard-coded sleep is only a workaround.
+✅ Use Playwright's waiting/assertion mechanisms.
+✅ Investigate why the application is unexpectedly slow if there is a genuine performance problem.
+
+I'd phrase it in an interview like this:
+
+“I wouldn't solve flaky tests by adding a fixed 10-second sleep before every click. It makes the test suite unnecessarily slow and still doesn't guarantee stability—if the element takes 11 seconds, the test still fails. Playwright already has auto-waiting, so I would use stable locators and assertions such as expect(locator).to_be_visible() when I specifically need to verify visibility. If the application itself is consistently taking too long, I would investigate the API, network, logs, or environment rather than hiding a performance problem with sleeps.”
+
+🔥 That's a strong Playwright answer.
+
+You don't normally need to do this before every click:
+
+expect(button).to_be_visible()
+button.click()
+
+Often this is enough:
+
+button.click()
+
+because Playwright performs actionability checks automatically.
+
+Use expect() when visibility/state is something you actually want to assert, not just mechanically before every action.
+
+///////////////////////////Part 4 - Fixtures //////////////
+
+This is one of the topics I definitely want you to understand for the Bond interview.
+
+Imagine you have 50 tests:
+
+def test_booking(page):
+    page.goto("/login")
+    # login...
+def test_cancel_booking(page):
+    page.goto("/login")
+    # login...
+def test_payment(page):
+    page.goto("/login")
+    # login...
+def test_calendar(page):
+    page.goto("/login")
+    # login...
+
+Repeating setup everywhere is bad.
+
+Fixtures help us provide reusable test setup/resources.
+
+If you're using Playwright with Python + pytest, you already see one:
+
+def test_booking(page):
+
+page is a fixture provided by the Playwright pytest integration.
+
+You can also create your own.
+
+For example:
+
+import pytest
+
+
+
+
+@pytest.fixture
+def logged_in_page(page):
+    page.goto("/login")
+
+
+    page.get_by_label("Email").fill("test@test.com")
+    page.get_by_label("Password").fill("password")
+
+
+    page.get_by_role(
+        "button",
+        name="Login"
+    ).click()
+
+
+    return page
+
+Then:
+
+def test_booking(logged_in_page):
+    page = logged_in_page
+
+
+    page.goto("/facilities")
+
+
+    # booking test
+
+And:
+
+def test_calendar(logged_in_page):
+    page = logged_in_page
+
+
+    page.goto("/calendar")
+
+
+    # calendar test
+
+Now login setup isn't copied everywhere.
+
+
+Let's understand yield using only page
+
+Suppose every test needs to open Bond.
+
+We could create:
+
+import pytest
+
+
+@pytest.fixture
+def bond_page(page):
+
+
+    # SETUP
+    page.goto("https://example.com")
+
+
+    yield page
+
+
+    # CLEANUP
+    print("Test finished")
+
+Then:
+
+def test_facilities(bond_page):
+
+
+    bond_page.get_by_text("Facilities").click()
+
+Execution:
+
+1. pytest creates Playwright page
+              ↓
+2. bond_page fixture starts
+              ↓
+3. page.goto(...)
+              ↓
+4. yield page
+              ↓
+         TEST RUNS
+              ↓
+5. test finishes
+              ↓
+6. fixture continues after yield
+              ↓
+7. print("Test finished")
+
+So think of:
+
+yield page
+
+as:
+
+“Here is the prepared page. Give it to the test. When the test finishes, come back here and continue.”
+
+And sometimes you don't need yield
+
+Suppose our fixture only prepares something:
+
+@pytest.fixture
+def logged_in_page(page):
+    page.goto("/login")
+    page.get_by_label("Email").fill("qa@test.com")
+    page.get_by_label("Password").fill("123456")
+    page.get_by_role("button", name="Login").click()
+
+
+    return page
+
+Then:
+
+def test_booking(logged_in_page):
+    logged_in_page.goto("/facilities")
+
+This is fine if we don't need custom cleanup afterward.
+
+Use yield when you need:
+
+SETUP
+ ↓
+TEST
+ ↓
+TEARDOWN
+
+For example:
+
+@pytest.fixture
+def logged_in_page(page):
+
+
+    # SETUP
+    page.goto("/login")
+    # login...
+
+
+    yield page
+
+
+    # TEARDOWN
+    # custom cleanup if needed
+One thing to remember for the interview
+
+If they ask:
+
+“What is a pytest fixture?”
+
+You can answer:
+
+“A fixture provides reusable setup or resources for tests. For example, I can have a fixture that provides an authenticated page instead of repeating login setup in every test. If cleanup is required, I can use yield: code before yield is setup, the yielded object is provided to the test, and code after yield performs teardown.”
+
+That's enough.
+
+And your question about api_client was correct — we hadn't created one, so I shouldn't have introduced it without explaining where it came from.
+
+Now we can return to the original fixture problem using only page: 200 Bond tests all repeat the same UI login. What's wrong with that design, and how could we improve it?
+
+will it run all test which are test_ : yield page
+              ↓
+         TEST RUNS  or only specific?
+
+Only the specific test(s) that request that fixture. yield does not tell pytest to run all test_* functions.
+
+For example:
+
+@pytest.fixture
+def logged_in_page(page):
+    print("LOGIN")
+
+
+    yield page
+
+
+    print("CLEANUP")
+
+And we have three tests:
+
+def test_booking(logged_in_page):
+    print("BOOKING TEST")
+
+
+
+
+def test_cancel(logged_in_page):
+    print("CANCEL TEST")
+
+
+
+
+def test_something_else(page):
+    print("OTHER TEST")
+
+Pytest sees that test_booking requires:
+
+logged_in_page
+
+So execution is:
+
+LOGIN
+↓
+yield page
+↓
+test_booking runs
+↓
+test_booking finishes
+↓
+continue after yield
+↓
+CLEANUP
+
+Then pytest moves to the next test:
+
+LOGIN
+↓
+yield page
+↓
+test_cancel runs
+↓
+CLEANUP
+
+test_something_else doesn't request logged_in_page, so that fixture doesn't run for it.
+
+Why does pytest know which fixture to use?
+
+Because of the function argument:
+
+def test_booking(logged_in_page):
+                 ↑
+              fixture
+
+Pytest looks for:
+
+@pytest.fixture
+def logged_in_page(...):
+
+and executes it before the test.
+
+So you can think of:
+
+def test_booking(logged_in_page):
+
+as saying:
+
+“Before running me, please prepare logged_in_page and give it to me.”
+
+One very important detail
+
+By default, the fixture runs separately for each test.
+
+So:
+
+def test_booking(logged_in_page):
+
+and
+
+def test_cancel(logged_in_page):
+
+normally means:
+
+SETUP → test_booking → CLEANUP
+
+
+SETUP → test_cancel → CLEANUP
+
+Not:
+
+SETUP
+↓
+test_booking
+↓
+test_cancel
+↓
+CLEANUP
+
+There are fixture scopes that can change this (function, class, module, session), but don't worry about those yet.
+
+Quick check: if I have 100 tests but only 20 contain logged_in_page as an argument, how many tests will use that fixture?
+
+
+
+Fixture is one improvement
+
+Instead of 200 copies:
+
+@pytest.fixture
+def logged_in_page(page):
+    page.goto("/login")
+    page.get_by_label("Email").fill("qa@test.com")
+    page.get_by_label("Password").fill("password")
+    page.get_by_role("button", name="Login").click()
+
+
+    return page
+
+Then:
+
+def test_booking(logged_in_page):
+    page = logged_in_page
+
+Better: Playwright authentication state
+
+Playwright can save authenticated browser state—such as cookies and local storage—and reuse it.
+
+Conceptually:
+
+LOGIN ONCE
+    ↓
+save authenticated state
+    ↓
+auth.json
+    ↓
+┌──────────┬──────────┬──────────┐
+Test 1     Test 2     Test 3
+already    already    already
+logged in  logged in  logged in
+
+For example, during setup:
+
+page.goto("/login")
+page.get_by_label("Email").fill("qa@test.com")
+page.get_by_label("Password").fill("password")
+page.get_by_role("button", name="Login").click()
+
+
+page.context.storage_state(path="auth.json")
+
+Now we've stored authentication state.
+
+Later, a browser context can be created using that state:
+
+context = browser.new_context(
+    storage_state="auth.json"
+)
+
+Tests can start already authenticated.
+
+Important interview distinction
+
+Fixture:
+
+Helps organize reusable setup/cleanup.
+
+Storage state:
+
+Allows Playwright to reuse authentication state instead of repeatedly logging in through the UI.
+
+They solve related but different problems.
+
+
+Quick interview question
+
+Bond has:
+
+10 tests specifically testing login
+190 tests testing booking, payments, calendar, membership, etc.
+
+Would you use saved authentication state for all 200 tests, or only some of them?
+
+And why?
+
+Answer: I consider for example we pick up login (one from ten) and saved it and run booking,payments,calendar,membership etc. Then we use different Login option and as well save it and use for tests.
+
+Yes — that’s the right idea. I’d refine it a bit for interview wording.
+
+You generally would not use saved auth state for the 10 login tests, because those tests are specifically verifying the login flow itself. They should actually enter credentials and validate successful/failed login behavior.
+
+For the other 190 tests, using saved authentication state is a good approach because login is just test setup, not the feature under test.
+
+Your idea about multiple login types is also strong. For example, if Bond has different roles, you could save separate auth states:
+
+admin_auth.json
+customer_auth.json
+staff_auth.json
+
+Then:
+
+Booking tests → customer auth
+Admin tests → admin auth
+Staff tests → staff auth
+
+That avoids repeating UI login while still letting you test permissions correctly.
+
+A strong interview answer would be:
+
+“I would keep the login tests independent and perform real login there. For booking, payment, calendar, and membership tests, I would reuse saved authentication state because authentication is only a prerequisite. If the system has multiple roles, I would maintain separate saved states for each role.”
+
+That’s a very good Playwright design answer.
+
+Next topic should be Page Object Model, because it connects directly to this idea of keeping tests clean and reusable.
+
+
+////////////////////////////Day 2 — Part 5: Page Object Model (POM) //////////
+
+Architecture example
+tests/
+    test_booking.py
+    test_cancel_booking.py
+
+
+pages/
+    booking_page.py
+    calendar_page.py
+    payment_page.py
+
+This is also perfectly valid POM:
+
+class BookingPage:
+    def __init__(self, page):
+        self.page = page
+
+
+    def book_button(self):
+        return self.page.get_by_role("button", name="Book")
+
+
+    def court(self, name):
+        return self.page.get_by_text(name)
+
+
+    def book(self):
+        self.book_button().click()
+
+
+    def select_court(self, name):
+        self.court(name).click()
+
+
+Example (but POM is less valid then i have mention before):
+
+
+Bond example
+
+We could create:
+
+class BookingPage:
+
+
+    def __init__(self, page):
+        self.page = page
+        self.book_button = page.get_by_role(
+            "button",
+            name="Book"
+        )
+
+
+    def select_court(self, court_name):
+        self.page.get_by_text(court_name).click()
+
+
+    def select_time(self, time):
+        self.page.get_by_text(time).click()
+
+
+    def book(self):
+        self.book_button.click()
+
+Our test becomes:
+
+def test_book_court(page):
+
+
+    booking = BookingPage(page)
+
+
+    page.goto("/facilities")
+
+
+    booking.select_court("Court A")
+    booking.select_time("18:00")
+    booking.book()
+
+
+    expect(
+        page.get_by_text("Booking confirmed")
+    ).to_be_visible()
+
+The test now reads almost like English:
+
+Open facilities
+Select Court A
+Select 18:00
+Book
+Verify confirmation
+Why POM helps
+
+Imagine the developer changes:
+
+<button>Book</button>
+
+to:
+
+<button>Confirm Booking</button>
+
+Without POM, perhaps 40 tests contain:
+
+page.get_by_role("button", name="Book")
+
+We might need to update many tests.
+
+With POM, we change:
+
+self.book_button = page.get_by_role(
+    "button",
+    name="Confirm Booking"
+)
+
+in one place.
+
+That's the major maintenance advantage.
+
+But don't make a giant Page Object
+
+Bad architecture:
+
+BondPage
+ ├ login()
+ ├ logout()
+ ├ book()
+ ├ cancel()
+ ├ pay()
+ ├ refund()
+ ├ register()
+ ├ create_member()
+ ├ delete_member()
+ ├ generate_report()
+ ├ ...
+
+Eventually you have a 5,000-line monster.
+
+Prefer logical pages/components:
+
+LoginPage
+BookingPage
+CalendarPage
+PaymentPage
+MembershipPage
+
+Potentially components too:
+
+CalendarComponent
+NavigationComponent
+PaymentModal
+
+
+//////////////Day 2 — Part 6: API testing with Playwright /////////////////////
+
+
+Now we connect UI automation with APIs.
+
+Playwright isn't only for browser testing. It can also send HTTP requests.
+
+Conceptually:
+
+response = request.get(
+    "https://api.example.com/bookings/123"
+)
+
+Then:
+
+expect(response).to_be_ok()
+
+and:
+
+data = response.json()
+
+
+assert data["status"] == "confirmed"
+
+Why is this useful?
+
+Imagine we're testing:
+
+Cancel booking
+
+We could prepare everything through UI:
+
+Login
+↓
+Find facility
+↓
+Select court
+↓
+Select time
+↓
+Book
+↓
+Pay
+↓
+Open calendar
+↓
+Find booking
+↓
+
+
+NOW finally test cancellation
+
+That's slow and creates many possible failure points.
+
+Instead, depending on the available API:
+
+API → create prerequisite booking
+          ↓
+UI → open booking
+          ↓
+UI → CANCEL
+          ↓
+UI/API → verify cancellation
+
+Now our test is focused on cancellation.
+
+This connects to the api_client example that confused you earlier. We could eventually build our own API helper, but first understand the concept.
+
+Another useful pattern
+
+UI performs action:
+
+UI
+↓
+Book Court A
+
+Then API verifies backend state:
+
+GET /bookings/123
+↓
+{
+    "court": "Court A",
+    "status": "confirmed"
+}
+
+This can give us stronger validation than checking only a success message.
+
+
+
