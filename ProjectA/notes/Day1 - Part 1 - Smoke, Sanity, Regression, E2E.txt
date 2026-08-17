@@ -1,0 +1,1182 @@
+Four tesrm come up in the QA Interview:
+1.Smoke testing - it is when we do monilal check for the new created app/feature , where the main question: Is the new build basically alive ?
+
+a tests which can be created for a CRITICAL components when new build is coming:
+
+for a BOND-like system:
+
+/////////////Smoke tests////////////////////////////
+
+a)Is Application opens
+b)Is user can login
+c)Facilities loaded
+d)User can create a booking
+e)Critical API respond
+
+If login doesn't work, there's little reason to run 2,000 regression tests.
+
+
+Think:
+
+Smoke = Can we continue testing this build?
+
+
+/////////////Sanity Tests/////////////////////
+
+the main focus to check after a SMALL change or BUG fix
+
+example developer changed and fixed a bug cancellation of facility booking
+
+sanity test should have:
+
+a)create a booking
+b)cancel booking
+c)booking becomes canceled
+d)time slot becomes available
+
+so it might also test few directly related cases BUT you do not run entire application test (cause the fix is not related to them !!!!)
+
+
+Think:
+
+Sanity = Does this particular change behave reasonably?
+
+///////////////////Regression Test //////////////
+
+much broader (bigest)
+
+Q: Did you chnages break existing functionality?
+
+For example: In bond system were made changes in PAYMENT system
+and we know payment is can be usend in different func and options
+
+so we need to verify:
+a)Booking - then user do payment
+b)Registration - cause might be registration is as well cost some $
+c)Membership - cause membership can be not free
+d)Payments for some facilities or services
+e)Refund
+f)Cancelation
+g)Discounts
+h)Invoices
+
+Even if only the payment service changed, multiple existing features could be affected.
+
+This is where automation becomes especially valuable.
+
+////////////////E2E Tests ////////////////////
+
+Test which run and do COMPLETE BUSSINESS WORKFLOW across components
+
+For example:
+
+a)User do login (Admin,Manager etc)
+b)Seach for facility
+c)Select court for example in this facility which is pick up
+d)Select time and date 20/08/2026 - 18:00-20:00 
+e)Order/Book
+f)Pay
+g)Confirmation (pop up or email/whatsapp been sent)
+h)Booking appear in the calendar
+
+An E2E can touch API- authentication - booking service - payment - database - callendar - email service etc
+That's why E2E tests are powerful but also generally slower and more expensive to maintain.
+
+
+
+
+Quick interview comparison
+Type	Main question	Scope
+Smoke	Is the build usable?	Very small
+Sanity	Does this change/fix work?	Small/focused
+Regression	Did we break existing features?	Large
+E2E	Does the full user workflow work?	Full flow
+
+One important point: these categories can overlap.
+
+For example, your smoke suite might contain one critical E2E booking test.
+
+
+
+Your first interview question
+
+I'm the Bond interviewer now.
+
+"We just deployed a new version of the Bond platform to staging. Developers changed the facility booking functionality. You have only 15 minutes before Product wants to start testing. What would you test first, and why?"
+
+
+My answer:
+
+Answer:  for 15 min i can do or manually test or do sanity test . Dev did teh change in the facility booking so we want test this area - login and do booking,check if it been booked and see in the calendar + option to cancel a booking
+
+You're thinking in the right direction, especially by focusing on the changed area and the critical booking flow. But I'd improve two things before an interview.
+
+First, manual testing and sanity testing aren't alternatives. "Manual" describes how you execute the test; "sanity" describes what/scope you're testing. You can perform a sanity test manually.
+
+Second, because we have only 15 minutes, explicitly mention risk and prioritization.
+
+Stronger interview answer
+
+"Since I only have 15 minutes and the developers changed the facility booking functionality, I would perform a focused sanity test manually. I would first verify that I can log in, select an available facility and time slot, create a booking, and confirm that the booking appears correctly in the calendar. Then I would cancel the booking and verify that the time slot becomes available again. If time remains, I would check one important negative scenario, such as trying to book an already occupied time slot. I prioritize these tests because booking is the functionality that changed and these are its critical user flows."
+
+That's a good interview-level answer.
+
+
+One follow-up they could ask
+
+Interviewer:
+
+"Why don't you run the full regression suite?"
+
+Good answer:
+
+"Because I only have 15 minutes. I would prioritize the highest-risk functionality affected by the change. Full regression can run later, preferably through automation in CI."
+
+That demonstrates risk-based testing, which is important for this role.
+
+/////////////////////////////////////////Part 2 -Positive and Negative Testing ///////////////
+
+Positive Testing - when the flow is fully working and correct (when we use valid input user behavior)
+
+Positive flow:
+
+a)User do login to the system
+b)Select facility and facility exist
+c)Date is valid 18-19 is available
+d)Payment is valid
+e)Booking scheduled success.
+
+Negative flow:
+
+a)User use do login with wrong password or login
+b)try booking occupied slot
+c)try biooking a past date
+d)Try booking without login
+Invalid Payment
+e)Missing required information
+f)Try booking unavailable facility
+
+
+Important interview mindset:
+
+Negative testing isn't simply:
+
+"Try random bad data."
+
+You're checking that the application rejects invalid actions safely and gives the correct response.
+
+For example:
+
+Two users attempt to book Court #1
+August 20
+18:00–19:00
+
+The system shouldn't create two bookings.
+
+
+Your turn — Interview Question #2
+
+Bond introduces this feature:
+
+A logged-in customer can book a tennis court. They select a court, date, start time and duration, then click "Book". A customer cannot book a court that's already occupied.
+
+I'm the interviewer:
+
+"Give me positive and negative test scenarios for this feature."
+
+A cleaner way to think about it is:
+
+Positive test = valid action → system accepts it.
+Negative test = invalid action → system rejects it correctly.
+
+For this booking feature, strong examples would be:
+
+Positive scenarios: User logs in, selects an available court/date/time/duration, books successfully, receives confirmation, and sees the booking in the calendar. Another positive case could verify cancellation: the user cancels their booking and the slot becomes available again.
+
+Negative scenarios: User tries to book an already occupied court → system rejects the booking and shows an appropriate message. User tries to book a past date → rejected. User tries to book without being logged in → redirected/rejected. User selects an invalid duration → rejected. Two users try to reserve the same slot at almost the same time → only one booking should succeed.
+
+For an interview, you can phrase one negative test like this:
+
+“I would try to book a court that is already occupied. The expected result is that the booking is not created, the user receives a clear message that the slot is unavailable, and ideally the system shows alternative available slots.”
+
+That last part you mentioned—suggesting additional/alternative hours—is actually a good product-oriented observation.
+
+
+
+The terminology is:
+
+Positive testing: Give the system valid conditions → expect success.
+Negative testing: Give the system invalid/disallowed conditions → expect the system to reject them correctly.
+
+So:
+
+Test	Expected result	Type
+Book an available court	Booking succeeds	✅ Positive
+Book an occupied court	Booking rejected	❌ Negative
+Book an occupied court and booking succeeds	That's a bug	🐛 Defect
+
+Your original occupied-court test was therefore correct as a test, just placed under the wrong heading.
+
+And your idea:
+
+“System suggests additional/alternative hours”
+
+is useful only if that's actually a product requirement. If the requirement doesn't say that, as QA we shouldn't invent the expected behavior. We can raise it as a product question:
+
+“When a slot is occupied, should we only show an error, or should we also suggest available times?”
+
+That distinction—requirement vs assumption—is actually something interviewers like to see.
+
+
+Boundary question:
+
+Court hours: 08:00–22:00. Booking duration: minimum 1 hour, maximum 3 hours.
+
+Boundary test can be:
+
+Positive:
+User login and allowed to book 1 hour from 8 am and the last hour to book for 1 hour is 21:00
+User logined and allowed to book 3 hours from 8 am and 19:00 for 3 huours last time
+
+Negative flow:
+User will try to book for 1 hour from 22:00 , or 3 hours from 21:00 and it  should be not allowed
+User can try to book 4 and more hours - which should be not allowed
+User can try to book 30 min as well not allowed
+
+Yes — this is a good answer. You understand boundary testing correctly. I'd rate it about 8/10 for an interview.
+
+You correctly identified the important boundaries:
+
+Opening time: 08:00
+Closing time: 22:00
+Minimum duration: 1 hour
+Maximum duration: 3 hours
+Just outside the duration limits: 30 min / 4 hours
+
+One improvement: in boundary testing, interviewers like hearing “at the boundary, just below it, just above it.”
+
+For example, assuming the system allows sufficiently precise time increments:
+
+Input	Expected
+07:59 start	❌ Reject
+08:00 start	✅ Accept
+08:01 start	✅ Accept
+30 min duration	❌ Reject
+1 hour duration	✅ Accept
+3 hours duration	✅ Accept
+3h 1m duration	❌ Reject
+21:00 → 22:00	✅ Accept
+21:01 → 22:01	❌ Reject
+22:00 → 23:00	❌ Reject
+
+Of course, if Bond only allows 15/30/60-minute increments, we'd use those increments instead of 1 minute. Don't assume—check the requirement.
+
+One subtle interview point
+
+You said:
+
+"3 hours from 21:00 should not be allowed."
+
+Correct. But I would also specifically test:
+
+19:00 + 3 hours = 22:00 → should be allowed.
+
+Why? Because that's testing two boundaries simultaneously: maximum duration and closing time.
+
+
+/////////////////////////////////////Part 3 — Equivalence Partitioning /////////
+
+
+Boundary vs equivalence
+
+This is a common interview question.
+
+Equivalence partitioning:
+
+Divide possible inputs into groups and test representative values.
+
+Boundary-value analysis:
+
+Concentrate on the edges between those groups.
+
+For duration 1–3 hours:
+
+Equivalence:
+
+
+30 min       2h        4h
+  ❌          ✅         ❌
+   ↑          ↑          ↑
+representatives
+
+
+
+
+Boundary:
+
+
+<1h | 1h ---------------- 3h | >3h
+      ↑                    ↑
+   boundary             boundary
+
+his sounds complicated, but it's actually simple.
+
+Suppose the requirement says:
+
+Booking duration must be 1–3 hours.
+
+We could test every possible value:
+
+0 min
+10 min
+20 min
+30 min
+...
+1 hour
+1.5 hours
+2 hours
+2.5 hours
+3 hours
+3.5 hours
+4 hours
+...
+
+That's inefficient.
+
+Instead, divide the inputs into groups (partitions):
+
+        INVALID          VALID           INVALID
+           ↓               ↓                ↓
+    duration < 1h       1h – 3h       duration > 3h
+
+Then choose a representative value from each group.
+
+For example:
+
+30 min → ❌
+2 hours → ✅
+4 hours → ❌
+
+The idea is:
+
+If 2 hours works, we usually don't need to test every possible value between 1 and 3 hours for this particular technique.
+
+
+
+Interview Question #4
+
+Bond has this requirement:
+
+A facility allows between 1 and 10 participants per booking.
+
+Using equivalence partitioning AND boundary-value analysis, tell me what values you would test.
+
+Give me two groups:
+
+Equivalence partitioning: try 1 , 3 , 5 , 7 , 0.5 participans
+
+Boundary testing: try 1 and 10, 0 or 11 participants
+
+
+You're very close on boundary testing, but we need to fix the equivalence-partitioning part.
+
+Boundary testing — ✅ Good
+
+Requirement:
+
+1–10 participants allowed
+
+You said:
+
+1, 10, 0, 11
+
+That's good. Even stronger would be:
+
+0  → ❌ just below minimum
+1  → ✅ minimum
+2  → ✅ just above minimum
+
+
+9  → ✅ just below maximum
+10 → ✅ maximum
+11 → ❌ just above maximum
+
+So in an interview, 0, 1, 2, 9, 10, 11 is an excellent answer.
+
+Equivalence partitioning — needs adjustment
+
+You proposed:
+
+1, 3, 5, 7, 0.5
+
+The point of equivalence partitioning is that we don't need to test 1, 3, 5, and 7 because they're mostly members of the same valid partition.
+
+Think about the possible inputs:
+
+Invalid             Valid               Invalid
+   ↓                  ↓                    ↓
+
+
+< 1             1 -------- 10             > 10
+
+So we have three major partitions:
+
+Partition 1: < 1      → invalid
+Partition 2: 1–10     → valid
+Partition 3: > 10     → invalid
+
+Pick one representative from each:
+
+0  → ❌
+5  → ✅
+15 → ❌
+
+And your 0.5 participants raises another good test-design question: what if the API accepts a decimal? Since participants are normally whole people, I'd also test invalid data types/values such as 1.5, "five", null, or possibly negative numbers. But that's separate from the basic three partitions.
+
+
+
+Interview answer
+
+If they ask:
+
+"Explain equivalence partitioning vs boundary-value analysis."
+
+You can say:
+
+"Equivalence partitioning divides inputs into groups that should behave the same, so I select representative values from each group. Boundary-value analysis focuses specifically on values at and immediately around the limits."
+
+That's enough. Don't overcomplicate it.
+
+Again  Boundary is if we have 1 up to 10 participans so boundry lowest is 1 so we need to test less then boundry so 0 participans , and test bigets then lowest boundry close is 1 and 2 . Then we need test upper boundry 10 . So less is 9 and 11 should be tested. 9 will work and positive adn 11 should be failing.
+For quivalence partioning we need divide to the groups , we now 1-10 perticipants so we should check some check which is smalles group for example 0 and then int he group itself 5 for example and then 15 like greater group.
+
+
+
+Partition 1: < 1      → invalid
+Partition 2: 1–10     → valid
+Partition 3: > 15     → invalid
+
+
+
+///////////////////////////////Part 4 Exploratory testing //////////////////////
+
+
+Next: Exploratory Testing
+
+This is particularly relevant because Bond's description explicitly wants someone doing manual + automated QA.
+
+Imagine a developer tells you:
+
+"The new booking page is ready. There are no test cases yet. Please test it."
+
+You have 30 minutes.
+
+🎤 Interview Question #5
+
+What would you do?
+
+Don't give me individual test cases yet. Tell me how you would approach testing a completely new feature when there are no existing test cases.
+
+Good answer:
+
+A stronger answer would be:
+
+“First I would understand the feature requirements and the main business flow, including user roles and expected behavior. Then I would explore the happy path first to make sure the basic booking flow works. After that I would test high-risk areas such as double booking, permissions, payment, cancellation/refund, and calendar updates. I would also try unexpected user behavior and different inputs to discover edge cases. While testing, I would document what I tested, bugs I found, and areas that need deeper regression or automation.”
+
+That answer shows a method:
+
+Understand → Prioritize → Explore → Observe → Document → Follow up
+
+
+Interview follow-up
+
+Suppose you find this:
+
+User books a court successfully. Payment succeeds and the user receives confirmation, but the booking doesn't appear in the calendar until the page is refreshed.
+
+You're reporting this bug in Jira.
+
+Tell me what you would include in the bug report.
+
+Don't worry about exact Jira formatting yet. Tell me the information you think a developer needs.
+
+Answer: In the bug i should add all the steps i have made - Login which user and which steps been made until i get this issue + screenshots and might be logs + DB table (if i know where to look)
+
+Yes. That's the right foundation. Steps to reproduce + user/role + evidence + logs/data are exactly what a developer needs.
+
+I'd rate your answer 7/10 because several important pieces are missing.
+
+For a strong Jira bug report, think:
+
+What happened? What should have happened? How can I reproduce it? Where did it happen? How serious is it? What evidence do I have?
+
+For our example, you'd want:
+
+Title: Booking does not appear in calendar until page refresh
+Environment: Staging, browser/version, build if known
+Preconditions: Registered user logged in; court/time available
+Steps to reproduce: exact actions taken
+Actual result: Payment/booking succeeds, but calendar doesn't update until refresh
+Expected result: New booking should appear in the calendar without requiring manual refresh
+Reproducibility: e.g. 5/5 attempts
+Severity / priority: your assessment
+Evidence: screenshot/video
+Technical evidence: console errors, network/API response, request ID, logs, DB state if accessible
+
+And you made a particularly good point:
+
+"DB table (if I know where to look)"
+
+Exactly. Don't randomly modify production data, but if QA has read access to the test DB, checking whether the booking was actually persisted can dramatically improve the bug report.
+
+For example:
+
+UI:       booking missing
+API:      GET /bookings returns booking
+Database: booking exists
+
+Now we have evidence that the booking itself probably succeeded and the problem may be around UI state/calendar refresh, rather than saying vaguely, "calendar broken."
+
+
+/////////////////////////////Part Severity vs Priority ////////////
+
+
+This is a very common QA interview question.
+
+Severity
+
+How badly does the bug affect the system?
+
+Examples:
+
+Critical: Payment taken twice, data corruption, system unavailable.
+
+High: Users cannot create bookings.
+
+Medium: Booking is created but doesn't immediately appear in calendar.
+
+Low: Button text is slightly misaligned.
+
+Priority
+
+How urgently should we fix it?
+
+That's a business/release decision.
+
+This creates an important distinction:
+
+Severity = technical/user impact
+
+Priority = urgency of fixing it
+
+For example, a typo on Bond's homepage could technically have low severity, but if it's a highly visible mistake right before a major launch, Product could give it high priority.
+
+Conversely, a serious bug in an obscure admin function used once per year might have high severity but lower immediate priority.
+
+nterview Question #6
+
+Give me severity and priority for these three Bond bugs and explain why:
+
+Bug A: Users cannot make any facility bookings.
+
+Bug B: The Bond logo is distorted on the login page, but everything works.
+
+Bug C: A customer pays $100, payment succeeds, but the system displays the booking as unpaid, causing staff to potentially ask the customer to pay again.
+
+You can answer simply:
+
+Bug A: — Severity: Critical , Priority: Urgent or Show Stoper ? — because it impacts our bussines and users can not order and pay for the service.
+
+Bug B — Severity: Low, Priority: Medium — users see it and BOND bussines impacts as not seriuos 
+
+Bug C — Severity: Critical, Priority: High — user can try to pay twice or even cancel the booking
+
+
+
+Good. Your reasoning is getting stronger. I’d give this 8.5/10. The main thing to improve is terminology and the distinction between Critical vs High severity.
+
+Bug A — Users cannot make any bookings
+
+You answered:
+
+Severity: Critical
+Priority: Urgent / Showstopper
+
+✅ I agree.
+
+A polished interview answer:
+
+Severity: Critical / Blocker, Priority: Highest. Booking is a core business function, and no customers can complete bookings, which directly impacts revenue and prevents normal use of the product.
+
+One terminology point: “Showstopper/Blocker” is usually a severity/category rather than a priority. Jira configurations differ between companies, so don't get stuck on exact labels.
+
+Bug B — Distorted logo
+
+You answered:
+
+Severity: Low, Priority: Medium
+
+✅ Reasonable.
+
+I'd probably start with:
+
+Severity: Low, Priority: Low/Medium.
+
+Because functionality isn't affected.
+
+But you correctly identified why priority could be higher: it's customer-facing and affects the company's image.
+
+This is actually an important interview concept:
+
+Priority depends on business context.
+
+If tomorrow is a huge product launch and every customer sees the broken logo:
+
+Severity: Low
+Priority: High
+
+That's perfectly possible.
+
+Bug C — Payment succeeded but booking says unpaid
+
+You answered:
+
+Severity: Critical, Priority: High
+
+✅ Very good reasoning.
+
+I'd potentially make priority Highest/Urgent as well.
+
+Why?
+
+Customer pays $100
+        ↓
+System says UNPAID
+        ↓
+Customer/staff may retry payment
+        ↓
+Possible duplicate charge
+        ↓
+Customer complaint + refund + trust/revenue impact
+
+So:
+
+Severity: Critical, Priority: Highest. There's a financial and data-consistency problem that could lead to duplicate payments and directly impact customers.
+
+This is exactly the kind of issue I'd want a QA Engineer to escalate immediately.
+
+
+One important interview trap
+
+Interviewer:
+
+"Who decides severity and priority?"
+
+Don't say:
+
+"QA decides everything."
+
+A stronger answer:
+
+"QA can assess and report severity based on technical and user impact. Priority is usually decided collaboratively with Product/Engineering based on business impact, release risk, customer impact and urgency."
+
+Different companies handle ownership differently, so saying collaboratively is safe and realistic.
+
+
+
+
+
+///////////////////////////Part - Test Case vs Test Scenario ////////////////
+
+
+Part 5 — Test Case vs Test Scenario
+
+You've already been doing both, but let's make the terminology clear.
+
+Test scenario
+
+High-level:
+
+Verify that a customer can successfully book an available tennis court.
+
+It tells us what to test.
+
+Test case
+
+Detailed:
+
+Preconditions
+
+User is registered
+User is logged in
+Court A is available
+
+Steps
+
+1. Open Facilities
+2. Select Court A
+3. Select August 20
+4. Select 18:00–19:00
+5. Click Book
+6. Complete payment
+
+Expected result
+
+Payment succeeds
+Booking is created
+Confirmation is displayed
+Court A becomes unavailable for 18:00–19:00
+Booking appears in user's calendar
+
+So remember:
+
+Scenario = WHAT to test
+
+Test case = HOW to test it + expected result
+
+
+
+
+
+Interview Question #7 — More realistic now
+
+A Product Manager gives you this requirement:
+
+"Users should be able to cancel their facility booking and receive a full refund if they cancel at least 24 hours before the booking."
+
+You're the QA Engineer.
+
+Before writing automation, what questions would you ask the Product Manager about this requirement?
+
+This is important. Don't immediately start writing test cases.
+
+Find what's unclear or missing from the requirement. There are quite a few hidden problems here.
+
+I would ask next questions: can user cancel any facility booking or only specific? can user to cancel multiple bookings? what happen if user cancel less then 24 hours (no refund or partial refund)?
+If user already cancel before some facility can he cancel again? Will full refund automatic accepted or not?
+
+I’d sharpen your answer like this:
+
+I would first clarify whether the cancellation policy applies to all facility bookings or only specific booking types. I would ask what exactly happens if the user cancels less than 24 hours before the booking — no refund, partial refund, or cancellation not allowed. I would also clarify whether the refund is automatic, how long it should take, and whether it goes back to the original payment method. I’d ask what should happen if the same booking is cancelled twice, and whether recurring or multiple bookings are cancelled individually or together.
+
+
+There are also several excellent edge questions you could add in a real interview: what does “24 hours before” mean exactly; which timezone is used; what happens at exactly 24:00:00 before the booking; what happens if payment was made partly with credit/discount/coupon; what happens if the facility cancels instead of the customer; and what status should appear while a refund is processing.
+
+That exactly 24 hours question is especially important because it leads directly into boundary testing.
+
+For example, if the booking is on August 20 at 18:00:
+
+Cancel Aug 19 17:59 → more than 24h → full refund
+Cancel Aug 19 18:00 → exactly 24h → full refund
+Cancel Aug 19 18:01 → less than 24h → according to policy
+
+Notice the wording says “at least 24 hours”, so exactly 24 hours should qualify.
+
+Your next task — Day 1 major exercise
+
+Now imagine the clarified requirement is:
+
+A logged-in customer can book an available tennis court. Courts are open 08:00–22:00. A booking must last 1–3 hours. A court cannot have overlapping bookings. A customer may cancel a booking. If cancellation occurs at least 24 hours before the booking start time, the customer receives a full refund. Less than 24 hours before the booking, there is no refund.
+
+Give me 10 test scenarios for this feature.
+
+Try to mix:
+positive, negative, boundary, booking conflict, cancellation/refund, and permissions.
+
+Positive: Customer login success, find needed facility , see the facility open hours 8-22 , booked for 3 hours 20/08/2026 3 hours from 15:00-18:00, paid and get success booking + added to the calendar. Caneletion option occurs near the booking and mentioned there at least 24 hours, user cancel the booking 24 hours before and get full refund to the same payment method.
+Negative:Customer login and tried to book the facility which already booked bu someone else - not booked for him and he get notification,customer tried to cancel less then 24 hours and get full refund - not get full refund, cutomer tried to book in the past - not worked for him.
+customer tried to do refund to the different payment method - not allowed for him.
+Boundary: Customer tried to book from 7 am - not allowed , tried to book at 8 am for 3 hours allowed, tried to book after 22pm - not allowed , tried to book for 3 hours from 20 pm - not allowed.Tried to book after 22 mp - not alloved.
+Canceleation and refund: customer did cancelation more then 24 hours and get refund to the same payment method, customer tried to do refund to different payment menthod - not allowed, customer tired to cancel less then 24 hours - not allowed with full refund.
+Permissions: not logined user can not see facilities and bookins, logined user can not see not his booked facilities and ask for refund for others.
+
+
+This is a strong set of ideas. You’re covering the right categories: happy path, conflicts, refund rules, opening-hours boundaries, and permissions.
+
+The main thing to improve now is test-scenario structure. In an interview, don’t pack many validations into one huge scenario. Make each scenario test one clear behavior.
+
+Your answer can be cleaned up into something like this:
+
+Successful booking: Logged-in customer books an available court from 15:00–18:00, completes payment, receives confirmation, and the booking appears in the calendar.
+Already occupied court: Customer attempts to book a court/time that is already reserved by another user. Booking should be rejected with a clear message.
+Past-date booking: Customer attempts to book a court for a date/time in the past. Booking should be rejected.
+Opening-time boundary: Customer books from 08:00 for a valid duration. Booking should be allowed.
+Before-opening boundary: Customer attempts to start a booking before 08:00. Booking should be rejected.
+Closing-time boundary: Customer books from 19:00–22:00 for the maximum 3-hour duration. Booking should be allowed.
+Past-closing boundary: Customer attempts to book from 20:00–23:00. Booking should be rejected because it exceeds closing time.
+Full-refund cancellation: Customer cancels at least 24 hours before the booking and receives a full refund according to the configured refund method.
+Late cancellation: Customer cancels less than 24 hours before the booking. Cancellation may succeed, but no refund should be issued according to the requirement.
+Permissions: A logged-in customer cannot cancel or refund another customer's booking.
+
+Two corrections are important.
+
+First, the requirement says:
+
+less than 24 hours → no refund
+
+It does not say cancellation itself is forbidden. So instead of saying:
+
+"customer tried to cancel less than 24 hours — not allowed"
+
+say:
+
+"cancellation is allowed, but no refund is issued"
+
+unless Product specifically says cancellation should also be blocked.
+
+Second, you assumed refunds must go to the same payment method. That may be correct, but it wasn't in the clarified requirement. In an interview, say:
+
+"I would clarify whether refunds must return to the original payment method."
+
+That shows you distinguish a requirement from an assumption.
+
+One thing you missed that I would definitely add is overlap testing, because the requirement explicitly says bookings cannot overlap. For example, if Court A is booked 15:00–17:00, test attempts for 14:00–16:00, 16:00–18:00, 15:30–16:30, and 17:00–18:00. The last one is especially interesting because it tests whether touching the end boundary counts as an overlap.
+
+Your Day 1 test-design thinking is already much better than at the start.
+
+
+Final Day 1 challenge
+
+Suppose Court A already has this booking:
+
+15:00–17:00
+
+Tell me whether each new request should be allowed or rejected, and why:
+
+14:00–15:00
+14:00–16:00
+15:00–17:00
+16:00–18:00
+17:00–18:00
+
+This is a very realistic booking-system interview question.
+
+Answer:
+14:00–15:00 -  can be allowed for 1 hour booking 
+14:00–16:00 - overlap is not allowed
+15:00–17:00 - no allowed cause already booked by someone else
+16:00–18:00 - not allowed cause overlap
+17:00–18:00 - allowed cause free
+
+
+Exactly right — 5/5.
+
+Your reasoning is correct:
+
+New request	Result	Why
+14:00–15:00	✅ Allowed	Ends exactly when existing booking starts
+14:00–16:00	❌ Rejected	Overlaps 15:00–16:00
+15:00–17:00	❌ Rejected	Exact same occupied slot
+16:00–18:00	❌ Rejected	Overlaps 16:00–17:00
+17:00–18:00	✅ Allowed	Starts exactly when existing booking ends
+
+The key rule is:
+
+Two bookings overlap when new_start < existing_end and new_end > existing_start.
+
+So touching boundaries like 14:00–15:00 and 17:00–18:00 are normally valid.
+
+
+One more interview-level case
+
+Now make it harder.
+
+Existing booking:
+
+15:00–17:00
+
+What should happen with:
+
+14:00–18:00
+15:30–16:00
+14:30–17:30
+13:00–14:00
+17:00–20:00
+
+Answer those, and then we’ll finish Day 1 with two Jira bug reports, which is the last important part of today’s plan.
+
+
+
+14:00–18:00 - not allowed overlap
+15:30–16:00 - not allowed 30 min booking + overlap(only 1 hour is minimal booking)
+14:30–17:30 - not allowed cause overlap
+13:00–14:00  - allowed booking
+17:00–20:00  - allowed booking
+
+Correct — 5/5 again.
+
+The best part is 15:30–16:00: you noticed two separate reasons it should fail: it overlaps an existing booking, and 30 minutes is below the 1-hour minimum. In an interview, that shows good attention to multiple business rules.
+
+Your answers:
+
+New request	Result	Reason
+14:00–18:00	❌ Reject	Overlaps existing booking
+15:30–16:00	❌ Reject	Overlap + duration below 1 hour
+14:30–17:30	❌ Reject	Overlaps existing booking
+13:00–14:00	✅ Allow	No overlap, valid duration
+17:00–20:00	✅ Allow	Starts exactly when existing booking ends
+
+One small interview tip: when there are multiple reasons for rejection, mention both, just like you did.
+
+Now let’s finish Day 1 with Jira bug reporting.
+
+Bug scenario 1
+
+A user successfully pays for a booking from 15:00–17:00. The payment succeeds and the booking is stored, but after returning to the calendar, the slot still appears available. Another user can then attempt to book the same slot.
+
+Write a short Jira bug with:
+
+Title, Preconditions, Steps to reproduce, Actual result, Expected result, Severity, Priority.
+
+Keep it concise, like a real bug report.
+
+
+Bug name: Slot appears available after booking in the calendar
+Bug Priority: High
+Bug Sevirity: High
+Precondition: User made booking and paid
+Steps to reproduce: User login , pick up facility and booked 15:00-17:00 and paid, booked facility didn't show as booked in the calenar and still available for the onother user booking
+Actual result: calendar shows the same slot is available in the calendar 
+Expected Result: calendar shows slot is booked 15-17
+
+
+Yes — this is a solid bug report. You included the essential information. I'd give it 8/10.
+
+The biggest improvement is separating steps from results. Your steps currently contain the bug itself.
+
+A cleaner Jira version would be:
+
+Title: Booked slot remains available in calendar after successful payment
+
+Severity: High
+Priority: High
+
+Preconditions:
+
+User A is registered and logged in.
+Court is available from 15:00–17:00.
+
+Steps to reproduce:
+
+Open the facility booking page.
+Select the court.
+Select 15:00–17:00.
+Complete the booking.
+Complete payment successfully.
+Return to/open the facility calendar.
+Check availability for 15:00–17:00.
+
+Actual result:
+The 15:00–17:00 slot is displayed as available even though the booking and payment succeeded.
+
+Expected result:
+The 15:00–17:00 slot should immediately be displayed as booked/unavailable.
+
+One thing I'd add
+
+Because the scenario says another customer can potentially book it, I'd investigate with User B:
+
+Log in as User B.
+Find the same facility/date.
+Check 15:00–17:00.
+Attempt to book it.
+
+Then we learn whether this is just a UI display bug or something more serious:
+
+User B sees available
+       ↓
+tries booking
+       ↓
+API rejects it
+
+→ probably UI/calendar synchronization problem.
+
+But:
+
+User B sees available
+       ↓
+tries booking
+       ↓
+booking succeeds
+
+→ 🚨 much more serious double-booking/data-integrity problem.
+
+That distinction can change the severity from High toward Critical/Blocker.
+
+Also attach evidence if available: screenshot/video, browser and environment, network response/request ID, console errors, and relevant logs.
+
+Jira Bug #2 — your turn
+
+Now a more difficult one.
+
+A customer has a booking for August 25 at 18:00 and paid $100.
+
+On August 24 at 17:59 (more than 24 hours before), the customer cancels the booking.
+
+The booking is successfully cancelled, but no refund is created.
+
+The customer's payment still shows $100 paid.
+
+Write:
+
+Title
+Severity
+Priority
+Preconditions
+Steps to reproduce
+Actual result
+Expected result
+
+This one is important because it combines boundary testing + payment + business rules + bug reporting.
+
+Answer:
+
+
+Title: Refund didn't work automatic more then 24 hours before for canceling booking
+Severity: Critical
+Priority: High
+Preconditions:  User login and have booked facility and paid, and see in the calendar facility and has cancel option more then 24 hours before it starts
+Steps to reproduce: Login , book facility for more then 24 hours, pay for facility,see it added to the calendar an been booked, do cacel facility more then 24 hours before it starts, facility calceled and booking removed no back payment.
+Actual result : User didn't get back payment for the canceled booking
+Expected result : User cancel more then 24 hours the booking - must get full refund to the method payment
+Added Video and screenshots + logs from the DB and from the service logs.
+
+
+
+Good. This is interview-ready with a few important corrections.
+
+I’d rate it 8.5/10. Your structure is right, and you correctly included evidence such as video, screenshots, DB data, and service logs.
+
+The main improvements are precision and avoiding assumptions.
+
+A cleaner version:
+
+Title: Full refund is not created when booking is cancelled more than 24 hours before start time
+
+Severity: High / Critical depending on company definitions
+Priority: High / Highest
+
+Preconditions:
+
+User is logged in.
+User has a confirmed booking for August 25 at 18:00.
+Booking was paid successfully for $100.
+Cancellation occurs more than 24 hours before the booking start time.
+
+Steps to reproduce:
+
+Log in as the customer.
+Open the existing booking.
+Verify the booking is confirmed and payment status is $100 paid.
+On August 24 at 17:59, cancel the August 25 18:00 booking.
+Verify the booking cancellation succeeds.
+Check refund/payment status.
+
+Actual result:
+Booking is cancelled successfully, but no refund is created and the payment still shows $100 paid.
+
+Expected result:
+Because cancellation occurred more than 24 hours before the booking start time, a full $100 refund should be created according to the cancellation policy.
+
+One correction: you wrote:
+
+“refund to the same payment method”
+
+We did not define that requirement yet. In an interview, don’t turn an assumption into an expected result. You could instead say:
+
+“A full refund should be created according to the configured refund process.”
+
+Then ask Product whether it must return to the original payment method.
+
+Also, for this exact case, mention the timestamps explicitly. That proves you verified the boundary:
+
+Booking: August 25, 18:00
+Cancellation: August 24, 17:59
+Difference: 24 hours + 1 minute
+
+That makes the bug much easier for developers to understand.
+
+
+
+
+
+In VS Code init Playwright project and pushed to the github:
+
+git add .
+git commit -m "Initial Playwright project setup"
+
+git remote add origin https://github.com/datik2012-jpg/PlaywrightAutomation.git
+git branch -M main
+git push -u origin main
+
+
+Recommended structure for a Codex project
+my-application/
+│
+├── app/                    # Your application code
+├── tests/                  # Automated tests
+├── docs/                   # Project documents created during planning
+│   ├── product-brief.md
+│   ├── architecture.md
+│   ├── security-plan.md
+│   └── release-plan.md
+│
+├── agents/                 # Your team’s role definitions
+│   ├── product-planner.md
+│   ├── architect.md
+│   ├── developer.md
+│   ├── test-engineer.md
+│   └── release-manager.md
+│
+├── ci/                     # CI/CD configuration and scripts
+│   ├── test.yml
+│   └── deploy.yml
+│
+└── README.md
+Each role file is simply a clear job description. For example:
+agents/product-planner.md
+
+Role: Product Planner
+
+Input:
+- A rough product idea
+
+Output:
+- Product brief in docs/product-brief.md
+- User stories
+- First-version scope
+- Open questions
+
+Rules:
+- Do not write application code.
+- Keep the first version small.
+- Ask for missing product decisions.
+Then, in Codex, you say:
+“Read agents/product-planner.md. Act as the Product Planner and create the product brief for my idea.”
+
+The output is saved in docs/. The next role reads that output:
+Product Planner → product brief
+Architect       → architecture document
+Developer       → application code
+Test Engineer   → tests and quality report
+Release Manager → CI/CD and release plan
+These are project files that you control. Later, if a role becomes useful across many projects, you can turn it into a reusable Codex skill.
+
+
+
+
+
+
+ The simplest setup is to keep your app code separate from your planning docs and your role definitions. Make each role a simple text file in an agents folder describing inputs, outputs, and rules. Like, "read the idea and produce a product brief in docs." Then in Codex, ask it to read that file and act accordingly; it writes the brief into docs, and the next role reads that output.
+
+
+Common HTML elements and Playwright methods:
+<button> → getByRole('button') and .click()
+<a> → getByRole('link') and .click()
+<input> → getByLabel(...) and .fill()
+<textarea> → getByLabel(...) and .fill()
+<select> → .selectOption()
+<input type="checkbox"> → .check()
+<input type="radio"> → .check()
+<h1>–<h6> → getByRole('heading')
+<img> → getByRole('img')

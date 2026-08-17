@@ -1,0 +1,858 @@
+
+///////////////Day 2 — Part 1: Locators //////////////////
+
+
+A locator tells Playwright which element you want to interact with.
+
+Imagine the Bond login page contains:
+
+<label>Email</label>
+<input type="email">
+
+
+<label>Password</label>
+<input type="password">
+
+
+<button>Log In</button>
+
+You could write:
+
+page.get_by_label("Email").fill("user@test.com")
+page.get_by_label("Password").fill("password")
+page.get_by_role("button", name="Log In").click()
+
+This is generally preferable to something brittle like:
+
+page.locator(
+    "body > div:nth-child(2) > div > form > button"
+).click()
+
+Why?
+
+Because the second locator depends heavily on the HTML structure. A developer adding another <div> could break your test even though the application still works perfectly.
+
+Locator priority
+
+Don't memorize this as an absolute rule, but a useful interview hierarchy is:
+
+get_by_role()
+      ↓
+get_by_label()
+      ↓
+get_by_placeholder()
+      ↓
+get_by_text()
+      ↓
+get_by_test_id()
+      ↓
+CSS
+      ↓
+XPath
+
+There's an important nuance with get_by_test_id().
+
+For automation-heavy applications, stable test IDs can actually be excellent locators:
+
+<button data-testid="confirm-booking">
+    Book
+</button>
+page.get_by_test_id("confirm-booking").click()
+
+The important idea is:
+
+Prefer stable, user-facing or explicitly testable locators rather than selectors coupled to implementation details.
+
+The simplest setup is to keep your app code separate from your planning docs and your role definitions. Make each role a simple text file in an agents folder describing inputs, outputs, and rules. Like, "read the idea and produce a product brief in docs." Then in Codex, ask it to read that file and act accordingly; it writes the brief into docs, and the next role reads that output.
+
+
+Common HTML elements and Playwright methods:
+<button> → getByRole('button') and .click()
+<a> → getByRole('link') and .click()
+<input> → getByLabel(...) and .fill()
+<textarea> → getByLabel(...) and .fill()
+<select> → .selectOption()
+<input type="checkbox"> → .check()
+<input type="radio"> → .check()
+<h1>–<h6> → getByRole('heading')
+<img> → getByRole('img')
+
+I have created a next login.spec.ts code which is waiting for website opend and fill email and passowrd and click LOGIN button:
+
+import { test, expect } from '@playwright/test';
+
+test('app is available at http://127.0.0.1:3000', async ({ page }) => {
+  const response = await page.goto('http://127.0.0.1:3000');
+
+  expect(response).not.toBeNull();
+  expect(response?.status()).toBe(200);
+});
+
+test('login with valid credentials', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByLabel('Email').fill('danitest@mail.com');
+  await page.getByLabel('Password').fill('1234567');
+  await page.getByRole('button', { name: 'Log In' }).click();
+
+  await expect(page.getByRole('status')).toHaveText('Login successful.');
+});
+
+
+
+Locator priority
+
+Don't memorize this as an absolute rule, but a useful interview hierarchy is:
+
+get_by_role()
+      ↓
+get_by_label()
+      ↓
+get_by_placeholder()
+      ↓
+get_by_text()
+      ↓
+get_by_test_id()
+      ↓
+CSS
+      ↓
+XPath
+
+There's an important nuance with get_by_test_id().
+
+For automation-heavy applications, stable test IDs can actually be excellent locators:
+
+<button data-testid="confirm-booking">
+    Book
+</button>
+page.get_by_test_id("confirm-booking").click()
+
+The important idea is:
+
+Prefer stable, user-facing or explicitly testable locators rather than selectors coupled to implementation details.
+
+Why get_by_role() is powerful
+
+Suppose we have:
+
+<button>Book</button>
+
+We can use:
+
+page.get_by_role("button", name="Book")
+
+We're basically saying:
+
+Find the thing a user/accessibility system recognizes as a button named Book.
+
+It also encourages accessible applications.
+
+Locator vs ElementHandle
+
+This could appear in an interview.
+
+A locator isn't simply a stored HTML element.
+
+For example:
+
+book_button = page.get_by_role("button", name="Book")
+
+
+book_button.click()
+
+Playwright resolves the locator when it performs the action.
+
+That's useful when the DOM changes dynamically.
+
+.first, .last, .nth()
+
+Suppose the page contains several courts:
+
+courts = page.get_by_test_id("court")
+
+
+print(courts.count())
+
+
+courts.first.click()
+courts.nth(2).click()
+
+But be careful.
+
+If you write:
+
+page.locator("button").nth(7).click()
+
+that's usually fragile.
+
+You want the locator to communicate what you're trying to interact with.
+
+Playwright strictness
+
+Suppose:
+
+page.get_by_role("button", name="Book").click()
+
+matches three buttons.
+
+Playwright normally doesn't just randomly choose one.
+
+You need to make the locator more specific.
+
+For example:
+
+court = page.get_by_test_id("court-123")
+
+
+court.get_by_role("button", name="Book").click()
+
+That's a useful interview concept.
+
+Bond example
+
+Imagine:
+
+Court A
+Available
+18:00
+[Book]
+
+
+Court B
+Available
+18:00
+[Book]
+
+Bad:
+
+page.get_by_role("button", name="Book").first.click()
+
+Better conceptually:
+
+court = page.get_by_test_id("court-A")
+court.get_by_role("button", name="Book").click()
+
+Now the test clearly communicates:
+
+Book Court A.
+
+
+
+nterview Question #1
+
+You're automating Bond's login page.
+
+A developer gives you these four possibilities:
+
+# A
+page.locator(
+    "body > div:nth-child(2) > form > button:nth-child(4)"
+).click()
+
+
+# B
+page.locator("//button[contains(text(),'Login')]").click()
+
+
+# C
+page.get_by_role("button", name="Login").click()
+
+
+# D
+page.locator(".btn-primary").click()
+
+Which would you normally choose and why?
+
+And one more:
+
+Suppose there are now two Login buttons on the page.
+
+What would you do?
+
+Answer as though you're in the Bond technical interview.
+
+Answer: Better and best practice to use option C get_by_role 
+
+
+Correct. C is normally the best choice. But in the interview, don't stop at “best practice”—explain why.
+
+A stronger answer:
+
+“I would choose get_by_role("button", name="Login") because it identifies the element by its semantic role and accessible name. It's more readable and usually more stable than XPath, CSS classes, or selectors tied to the DOM structure. If the HTML structure or CSS class changes but the user still sees the same Login button, my test can continue working.”
+
+That's the kind of explanation they want.
+
+
+
+Why not the others?
+
+A — DOM structure
+
+page.locator(
+    "body > div:nth-child(2) > form > button:nth-child(4)"
+)
+
+❌ Very fragile. Adding a <div> could break the automation.
+
+B — XPath
+
+page.locator("//button[contains(text(),'Login')]")
+
+It can work, but it's more implementation-oriented and usually unnecessary when Playwright provides better semantic locators.
+
+D — CSS class
+
+page.locator(".btn-primary")
+
+Also works, but CSS classes often change for styling reasons and there may be many .btn-primary elements.
+
+
+///////////////////////////// Part 2 — Assertions ///////////////
+
+Locators find/interact with things.
+
+Assertions verify that the application did what we expected.
+
+In Playwright Python:
+
+from playwright.sync_api import expect
+
+Then:
+
+expect(page).to_have_url("https://example.com/dashboard")
+
+or:
+
+expect(
+    page.get_by_text("Booking confirmed")
+).to_be_visible()
+
+For our booking:
+
+page.get_by_role("button", name="Book").click()
+
+
+expect(
+    page.get_by_text("Booking confirmed")
+).to_be_visible()
+
+The important thing is that we aren't only performing actions:
+
+login()
+select_court()
+click_book()
+pay()
+
+We need to verify outcomes.
+
+For example:
+
+expect(success_message).to_be_visible()
+expect(booking).to_be_visible()
+expect(slot).to_have_text("Booked")
+A common QA Automation mistake
+
+Imagine someone writes:
+
+page.goto("/login")
+page.get_by_label("Email").fill("test@test.com")
+page.get_by_label("Password").fill("123456")
+page.get_by_role("button", name="Login").click()
+
+
+page.get_by_role("link", name="Facilities").click()
+
+
+page.get_by_text("Court A").click()
+
+
+page.get_by_role("button", name="Book").click()
+
+and says:
+
+“My booking test passed!”
+
+Not necessarily.
+
+The test proved Playwright could click things without throwing an error.
+
+It hasn't actually verified that the booking was created.
+
+We need assertions.
+
+
+Interview Question #2
+
+You have this test:
+
+def test_booking(page):
+
+
+    page.goto("https://bond.example.com")
+
+
+    page.get_by_text("Court A").click()
+    page.get_by_text("18:00").click()
+
+
+    page.get_by_role(
+        "button",
+        name="Book"
+    ).click()
+
+The test passes.
+
+The interviewer asks:
+
+“How do you know the booking was actually successful?”
+
+Tell me what you would verify/assert after clicking Book.
+
+Don't write perfect Python yet. Tell me the checks you would perform.
+
+
+
+
+Now if i want to create separate project and do  there python playwright tests
+
+PlaywrightAutomation/
+├── ProjectA/          # TypeScript tests
+└── ProjectPython/     # Python tests
+
+mkdir ProjectPython
+cd ProjectPython
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+pip install pytest-playwright
+python -m playwright install chromium
+
+mkdir tests
+
+Create ProjectPython/tests/test_booking.py:
+from playwright.sync_api import Page, expect
+
+
+def login(page: Page, email: str, password: str) -> None:
+    page.goto("http://127.0.0.1:3000")
+
+    page.get_by_label("Email").fill(email)
+    page.get_by_label("Password").fill(password)
+    page.get_by_role("button", name="Log In").click()
+
+    expect(page).to_have_url("http://127.0.0.1:3000/courts.html")
+
+
+def test_booking_court_a(page: Page) -> None:
+    login(page, "dani@example.com", "1234567")
+
+    court_a = page.get_by_role("article", name="Court A")
+
+    expect(court_a).to_contain_text("Available")
+    expect(court_a).to_contain_text("18:00")
+
+    court_a.get_by_role("button", name="Book").click()
+Because the website still belongs to ProjectA, start its server in one terminal:
+cd D:\GitHub\PlaywrightAutomation\ProjectA
+npm start
+Run the Python test in a second terminal:
+cd D:\GitHub\PlaywrightAutomation\ProjectPython
+.\.venv\Scripts\Activate.ps1
+pytest tests/test_booking.py --headed
+Run only Chromium without showing the browser:
+pytest tests/test_booking.py --browser chromium
+Python naming rules are important:
+Test files: test_something.py
+Test functions: def test_something(...)
+Python Playwright methods use snake case: get_by_role, to_have_url
+This setup follows Playwright’s recommended Python integration using its pytest plugin.
+
+To run the tests:
+
+cd D:\GitHub\PlaywrightAutomation\ProjectPython
+.\.venv\Scripts\Activate.ps1
+
+$env:PWDEBUG="1"
+pytest tests/test_login_and_booking.py -s
+To run one specific Python test:
+$env:PWDEBUG="1"
+pytest tests/test_login_and_booking.py::test_booking_court_a -s
+
+
+
+
+Interview Question #2
+
+You have this test:
+
+def test_booking(page):
+
+
+    page.goto("https://bond.example.com")
+
+
+    page.get_by_text("Court A").click()
+    page.get_by_text("18:00").click()
+
+
+    page.get_by_role(
+        "button",
+        name="Book"
+    ).click()
+
+The test passes.
+
+The interviewer asks:
+
+“How do you know the booking was actually successful?”
+
+Tell me what you would verify/assert after clicking Book.
+
+Don't write perfect Python yet. Tell me the checks you would perform.
+
+Answer: assert or expect is not exist in the code so the code does not validates the data after clicking. expect should wait and expect for some SUCCESS or text appear and validate it
+
+
+Exactly. The test currently verifies only that Playwright could perform the actions. It doesn't verify the business result.
+
+Your answer is correct, but in an interview I'd go one step further:
+
+“After clicking Book, I would use Playwright assertions to verify the expected result. For example, I could verify that a success message appears, that the booking appears in the user's calendar, and that the selected time slot changes from Available to Booked.”
+
+For example:
+
+page.get_by_role("button", name="Book").click()
+
+
+expect(
+    page.get_by_text("Booking confirmed")
+).to_be_visible()
+
+But we can make the test stronger:
+
+expect(
+    page.get_by_test_id("booking-status")
+).to_have_text("Confirmed")
+
+Potential validations after booking:
+
+✓ Confirmation displayed
+✓ Booking status = Confirmed
+✓ Correct court
+✓ Correct date
+✓ Correct time
+✓ Correct price
+✓ Booking appears in calendar
+✓ Slot becomes unavailable
+
+We don't necessarily need all of these in every test. We choose assertions based on what that particular test is supposed to prove.
+
+Example:
+
+def test_book_court_a(page: Page) -> None:
+    login(page, "dani@example.com", "1234567")
+
+    court_a = page.get_by_role("article", name="Court A")
+
+    # Book Court A
+    court_a.get_by_role("button", name="Book").click()
+
+    # Confirmation displayed
+    expect(
+        page.get_by_role("status")
+    ).to_have_text("Booking confirmed")
+
+    # Find the confirmation details
+    confirmation = page.get_by_test_id("booking-confirmation")
+
+    # Booking status is Confirmed
+    expect(confirmation).to_contain_text("Confirmed")
+
+    # Correct court
+    expect(
+        confirmation.get_by_test_id("booking-court")
+    ).to_have_text("Court A")
+
+    # Correct date
+    expect(
+        confirmation.get_by_test_id("booking-date")
+    ).to_have_text("17 August 2026")
+
+    # Correct time
+    expect(
+        confirmation.get_by_test_id("booking-time")
+    ).to_have_text("18:00")
+
+    # Correct price
+    expect(
+        confirmation.get_by_test_id("booking-price")
+    ).to_have_text("₪120")
+
+    # Booking appears in calendar
+    calendar = page.get_by_test_id("booking-calendar")
+
+    expect(calendar).to_contain_text("Court A")
+    expect(calendar).to_contain_text("18:00")
+
+    # Slot becomes unavailable
+    expect(court_a).to_contain_text("Unavailable")
+
+    # Book button can no longer be clicked
+    expect(
+        court_a.get_by_role("button", name="Booked")
+    ).to_be_disabled()
+The corresponding HTML would need identifiable elements such as:
+<p role="status">Booking confirmed</p>
+
+<section data-testid="booking-confirmation">
+  <span>Status: Confirmed</span>
+  <span data-testid="booking-court">Court A</span>
+  <span data-testid="booking-date">17 August 2026</span>
+  <span data-testid="booking-time">18:00</span>
+  <span data-testid="booking-price">₪120</span>
+</section>
+
+<section data-testid="booking-calendar">
+  Court A — 17 August 2026 — 18:00
+</section>
+
+
+
+Pass the expected time into the test function and use that variable in the assertion.
+def test_booking_court_a(page: Page) -> None:
+    court_name = "Court A"
+    expected_time = "18:00"
+
+    login(page, "dani@example.com", "1234567")
+
+    court = page.get_by_role("article", name=court_name)
+
+    # Check that the requested time is displayed
+    expect(court.get_by_text(expected_time, exact=True)).to_be_visible()
+
+    court.get_by_role("button", name="Book").click()
+You can create a reusable booking function:
+def book_court(
+    page: Page,
+    court_name: str,
+    expected_time: str
+) -> None:
+    court = page.get_by_role("article", name=court_name)
+
+    expect(
+        court.get_by_text(expected_time, exact=True)
+    ).to_be_visible()
+
+    court.get_by_role("button", name="Book").click()
+Call it with different values:
+def test_booking_court_a(page: Page) -> None:
+    login(page, "dani@example.com", "1234567")
+
+    book_court(
+        page=page,
+        court_name="Court A",
+        expected_time="18:00"
+    )
+For several combinations, use pytest parameters:
+import pytest
+from playwright.sync_api import Page, expect
+
+
+@pytest.mark.parametrize(
+    "court_name, expected_time",
+    [
+        ("Court A", "18:00"),
+        ("Court B", "18:00"),
+    ]
+)
+def test_court_availability(
+    page: Page,
+    court_name: str,
+    expected_time: str
+) -> None:
+    login(page, "dani@example.com", "1234567")
+
+    court = page.get_by_role("article", name=court_name)
+
+    expect(court).to_contain_text("Available")
+    expect(
+        court.get_by_text(expected_time, exact=True)
+    ).to_be_visible()
+Pytest runs this as two separate tests:
+Court A + 18:00
+Court B + 18:00
+The key line is:
+expect(court.get_by_text(expected_time, exact=True)).to_be_visible()
+
+
+
+
+Created reusisle py test:
+
+
+import os
+
+import pytest
+from playwright.sync_api import Page, expect
+
+
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:3000").rstrip("/")
+
+
+def login(page: Page, email: str, password: str) -> None:
+    page.goto(BASE_URL)
+
+    login_form = page.locator("#login-form")
+    login_form.get_by_label("Email").fill(email)
+    login_form.get_by_label("Password").fill(password)
+    login_form.get_by_role("button", name="Log In").click()
+
+    expect(page).to_have_url(f"{BASE_URL}/courts.html")
+
+
+def book_court(page: Page, court_name: str, booking_time: str) -> None:
+    court = page.get_by_role("article", name=court_name)
+
+    expect(court).to_contain_text("Available")
+    expect(court.get_by_text(booking_time, exact=True)).to_be_visible()
+
+    book_button = court.get_by_role("button", name="Book")
+    expect(book_button).to_be_enabled()
+    book_button.click()
+
+
+@pytest.mark.parametrize(
+    "court_name, booking_time",
+    [
+        ("Court A", "18:00"),
+        ("Court B", "18:00"),
+    ],
+)
+def test_login_and_book_court(
+    page: Page,
+    court_name: str,
+    booking_time: str,
+) -> None:
+    login(
+        page=page,
+        email="dani@example.com",
+        password="1234567",
+    )
+
+    book_court(
+        page=page,
+        court_name=court_name,
+        booking_time=booking_time,
+    )
+
+
+how to run:
+
+cd D:\GitHub\PlaywrightAutomation\ProjectPython
+python -m pytest tests/test_login_and_booking.py --browser chromium --headed
+Your .venv currently does not have pytest installed; the successful verification used your global Python installation. To fix the virtual environment:
+.\.venv\Scripts\Activate.ps1
+python -m pip install pytest-playwright
+python -m playwright install chromium
+
+
+During the second run, it becomes:
+book_court(
+    page=page,
+    court_name="Court B",
+    booking_time="18:00",
+)
+So the execution flow is:
+pytest discovers test
+    ├── Run 1: login → book Court A at 18:00
+    └── Run 2: login → book Court B at 18:00
+Run it with detailed names:
+python -m pytest tests/test_login_and_booking.py -v
+You should see two results similar to:
+test_login_and_book_court[Court A-18:00] PASSED
+test_login_and_book_court[Court B-18:00] PASSED
+
+////////////////////////////////////Part 3 - Auto-waiting 🔥 /////////////
+
+Imagine after clicking Book, the backend takes 2 seconds to respond.
+
+Someone writes:
+
+page.get_by_role("button", name="Book").click()
+
+
+time.sleep(5)
+
+
+expect(
+    page.get_by_text("Booking confirmed")
+).to_be_visible()
+
+This is generally bad.
+
+Why?
+
+Answer: It is bad cause responce time can be more then 0.5 sec and test will fail , or bad when sometime passes and some time fails
+
+
+
+Playwright's assertions can wait for the expected condition:
+
+expect(
+    page.get_by_text("Booking confirmed")
+).to_be_visible()
+
+Conceptually:
+
+0 sec → visible? no
+          ↓
+        wait
+          ↓
+1 sec → visible? no
+          ↓
+        wait
+          ↓
+2 sec → visible? YES
+          ↓
+        PASS
+
+It doesn't need to blindly sleep for five seconds.
+
+Playwright also performs actionability checks before actions such as clicks. It checks conditions such as whether the element is visible, stable, able to receive events, and enabled as appropriate.
+
+That's one major reason Playwright tests can be more reliable when written properly.
+
+Important distinction
+
+This:
+
+time.sleep(5000)
+
+means:
+
+Wait regardless of what's happening.
+
+Whereas:
+
+expect(message).to_be_visible()
+
+means:
+
+Wait until the condition I actually care about becomes true, up to the configured timeout.
+
+That's the mindset.
+
+
+
+Interview Question #3
+
+This is a very likely Playwright question:
+
+“Our Playwright tests sometimes fail in CI because elements load slowly. One QA Engineer fixed the problem by adding sleep(10) before every click. What is wrong with this approach, and what would you do instead?”
+
+Answer like you're sitting in the technical interview.
+
+
+

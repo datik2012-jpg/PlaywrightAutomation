@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login API Tester</title>
+    <style>
+      :root {
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        color: #172033;
+        background: #f4f7fb;
+      }
+
+      * { box-sizing: border-box; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; }
+      main { width: min(100%, 620px); padding: 36px; border: 1px solid #e3e8f1; border-radius: 18px; background: white; box-shadow: 0 20px 50px rgba(31, 47, 74, 0.12); }
+      h1 { margin-top: 0; }
+      code, pre { font-family: "Cascadia Code", Consolas, monospace; }
+      code { padding: 2px 6px; border-radius: 5px; background: #eef2ff; }
+      label { display: block; margin: 16px 0 6px; font-weight: 650; }
+      input { width: 100%; padding: 11px 12px; border: 1px solid #cbd3df; border-radius: 8px; font: inherit; }
+      button { width: 100%; margin-top: 20px; padding: 12px; border: 0; border-radius: 8px; background: #315bd6; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+      pre { min-height: 90px; overflow: auto; padding: 16px; border-radius: 10px; background: #111827; color: #e5e7eb; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Login API tester</h1>
+      <p>Send a <code>POST</code> request to <code>/api/login</code>.</p>
+      <p>Demo credentials: <code>dani@example.com</code> / <code>1234567</code></p>
+
+      <form id="api-login-form">
+        <label for="api-email">Email</label>
+        <input id="api-email" type="email" value="dani@example.com" required />
+
+        <label for="api-password">Password</label>
+        <input id="api-password" type="password" value="1234567" required />
+
+        <button type="submit">Send Login Request</button>
+      </form>
+
+      <h2>API response</h2>
+      <pre id="api-response" role="status">No request sent yet.</pre>
+    </main>
+
+    <script>
+      const form = document.querySelector('#api-login-form');
+      const output = document.querySelector('#api-response');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.querySelector('#api-email').value,
+            password: document.querySelector('#api-password').value,
+          }),
+        });
+
+        const body = await response.json();
+        output.textContent = JSON.stringify({ status: response.status, body }, null, 2);
+      });
+    </script>
+  </body>
+</html>
