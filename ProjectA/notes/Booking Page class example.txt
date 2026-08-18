@@ -1,0 +1,53 @@
+2. Page Object
+
+The Page Object should know how to interact with the UI.
+
+For example:
+
+class BookingPage:
+    def __init__(self, page):
+        self.page = page
+        self.book_button = page.get_by_role("button", name="Book")
+        self.confirmation = page.get_by_text("Booking confirmed")
+
+
+    def open(self):
+        self.page.goto("/facilities")
+
+
+    def select_court(self, name):
+        self.page.get_by_text(name).click()
+
+
+    def select_time(self, time):
+        self.page.get_by_text(time).click()
+
+
+    def book(self):
+        self.book_button.click()
+
+The URL can absolutely be handled in the Page Object via something like open().
+
+But server responses usually do not belong in the Page Object unless you intentionally build network/API helpers there. I’d keep API logic separate from UI page objects.
+
+3. What remains in the test?
+
+The test should contain the actual business scenario.
+
+For example:
+
+def test_customer_can_book_court(customer_page):
+
+
+    booking = BookingPage(customer_page)
+
+
+    booking.open()
+    booking.select_court("Court A")
+    booking.select_time("18:00")
+    booking.book()
+
+
+    expect(booking.confirmation).to_be_visible()
+
+Then maybe navigate to calendar and assert the booking exists.
