@@ -1,0 +1,761 @@
+Day 3 — REST API Testing + Postman + Playwright API
+
+Today we'll continue exactly like Days 1–2: small topic → interview question → you answer → I review → next topic.
+
+By the end of Day 3, I want you comfortable with:
+
+HTTP → REST → GET/POST/PUT/PATCH/DELETE → status codes → headers/body → authentication → positive/negative API testing → JSON validation → Postman → Playwright API → UI + API → booking-system scenarios.
+
+We won't try to memorize everything. We'll focus on what a QA Automation interviewer is likely to expect.
+
+Part 2 — HTTP methods
+
+You should know these for the interview.
+
+GET — retrieve something
+GET /api/bookings/123
+
+Meaning:
+
+Give me booking 123.
+
+Normally it shouldn't modify the booking.
+
+POST — create/perform something
+POST /api/bookings
+
+with:
+
+{
+    "courtId": 10,
+    "startTime": "18:00",
+    "duration": 2
+}
+
+Could create a new booking.
+
+Your login endpoint is also POST:
+
+POST /api/login
+
+Even though login isn't literally creating a database record, credentials are being submitted to perform an authentication operation.
+
+PUT — replace/update a resource
+
+Conceptually:
+
+PUT /api/bookings/123
+
+might send the complete updated representation.
+
+PATCH — partially update
+
+For example:
+
+PATCH /api/bookings/123
+{
+    "startTime": "19:00"
+}
+
+We're changing one part.
+
+DELETE
+DELETE /api/bookings/123
+
+Delete/cancel a resource, depending on the API design.
+
+Don't assume every real API follows these patterns perfectly. A system might have:
+
+POST /api/bookings/123/cancel
+
+instead of:
+
+DELETE /api/bookings/123
+
+That's an API design decision.
+
+
+Part 3 — Status codes you should know
+
+Don't memorize 50 codes. For this interview, know the important ones.
+
+Code	Meaning	QA example
+200	OK	Login succeeds / GET succeeds
+201	Created	Booking created
+204	Success, no response body	Successful DELETE
+400	Bad Request	Invalid/missing request data
+401	Unauthorized	Not authenticated / invalid credentials depending on API
+403	Forbidden	Authenticated but not permitted
+404	Not Found	Booking ID doesn't exist
+409	Conflict	Attempt to book occupied slot
+422	Unprocessable Content	Structurally valid request but validation/business-data problem in APIs that use this convention
+500	Internal Server Error	Unexpected server failure
+503	Service Unavailable	Service temporarily unavailable
+
+One distinction is extremely common in interviews:
+
+401 → Who are you? You're not successfully authenticated.
+
+
+403 → I know who you are, but you're not allowed to do this.
+
+For example:
+
+Customer isn't logged in
+GET /api/admin/users
+
+
+→ 401
+
+versus:
+
+Logged-in normal customer
+GET /api/admin/users
+
+
+→ 403
+
+
+Part 4 — First Day 3 interview exercise
+
+Suppose we have:
+
+POST /api/bookings
+
+Valid request:
+
+{
+    "facilityId": 100,
+    "courtId": 5,
+    "date": "2026-08-25",
+    "startTime": "18:00",
+    "durationHours": 2
+}
+
+The business rules from Day 1 still apply:
+
+opening hours 08:00–22:00
+booking duration 1–3 hours
+overlapping bookings aren't allowed
+user must be authenticated
+
+Tell me what HTTP status code you would expect or consider appropriate for each scenario:
+
+A. Valid booking is successfully created.
+
+B. User isn't logged in.
+
+C. User sends:
+
+{
+    "facilityId": 100,
+    "courtId": 5,
+    "date": "2026-08-25",
+    "startTime": "20:00",
+    "durationHours": 3
+}
+
+Remember the facility closes at 22:00.
+
+D. Court 5 is already booked 18:00–20:00, and another customer tries the same slot.
+
+E. Customer requests:
+
+GET /api/bookings/999999
+
+but booking 999999 doesn't exist.
+
+Give me A–E + status code + short reason.
+
+Today 7:04 PM
+A: Valid booking 200 code  B: Not login  user (not authorize) can be 401 C:  Will not approval code can be 422 ? D: 409 conflict slot E: Wrong request 400
+
+Good — 3/5 are exactly what I'd expect, and C is defensible depending on the API contract. Let's correct the two important ones.
+
+Case	Your answer	Better answer	Why
+A Valid booking created	200	201 Created	A new booking resource was created
+B Not logged in	401	401 Unauthorized ✅	Authentication required
+C 20:00 + 3h, closes 22:00	422	422 or 400 ✅	Request violates a business/validation rule; exact choice depends on API contract
+D Slot already occupied	409	409 Conflict ✅	Request conflicts with existing booking
+E Booking doesn't exist	400	404 Not Found	Request itself can be valid; requested resource doesn't exist
+A — why 201 instead of 200?
+
+We have:
+
+POST /api/bookings
+
+and successfully create:
+
+Booking #123
+
+200 means general success, but REST APIs commonly use:
+
+201 Created
+
+when a new resource has been successfully created.
+
+So remember:
+
+GET booking successful     → 200
+POST creates new booking   → 201
+
+Though always follow the actual API specification; some APIs use 200 for successful creation.
+
+E is an important distinction
+
+You answered 400.
+
+But:
+
+GET /api/bookings/999999
+
+isn't necessarily a bad request.
+
+The syntax is perfectly valid. The problem is simply:
+
+Booking 999999 doesn't exist.
+
+Therefore:
+
+404 Not Found
+
+Compare:
+
+GET /api/bookings/999999
+                    ↑
+valid ID format, doesn't exist
+→ 404
+
+versus something malformed/invalid according to the API contract:
+
+POST /api/bookings
+
+
+{
+   "durationHours": "BANANA"
+}
+
+which could reasonably result in:
+
+400 Bad Request
+
+or 422, depending on how that API defines validation errors.
+
+Interview trap: 401 vs 403
+
+Let's make sure this distinction is solid.
+
+Imagine Bond has an Admin API:
+
+DELETE /api/users/123
+
+Scenario 1: Request has no authentication token.
+
+What status?
+
+Scenario 2: Customer is successfully logged in, but only admins are allowed to delete users.
+
+What status?
+
+Scenario 3: Admin is logged in and authorized, but user 123 doesn't exist.
+
+Give me the three codes.
+
+1: 401 unauthorize  2: 403 authenticated but forbiden 3:  404 ?
+
+Exactly. 3/3. ✅
+
+401 Unauthorized — user isn't authenticated.
+403 Forbidden — user is authenticated, but doesn't have permission.
+404 Not Found — authorized request, but resource 123 doesn't exist.
+
+Remember this simple distinction:
+
+401 → I don't know who you are / authentication failed
+403 → I know who you are, but you can't do this
+404 → What you're asking for doesn't exist
+
+
+Day 3 — Part 5: API request structure
+
+Now let's go deeper than status codes.
+
+An API request can contain several important pieces:
+
+POST /api/bookings
+        ↓
+URL
+Method
+Headers
+Authentication
+Body
+Query parameters
+
+For example:
+
+POST /api/bookings
+Authorization: Bearer abc123
+Content-Type: application/json
+
+Body:
+
+{
+    "facilityId": 100,
+    "courtId": 5,
+    "date": "2026-08-25",
+    "startTime": "18:00",
+    "durationHours": 2
+}
+Headers
+
+Headers contain metadata about the request.
+
+For example:
+
+Content-Type: application/json
+
+means we're sending JSON.
+
+Authentication is often sent through a header:
+
+Authorization: Bearer abc123
+
+Here abc123 represents an access token.
+
+Body
+
+The body contains the data we're sending:
+
+{
+    "courtId": 5,
+    "durationHours": 2
+}
+Path parameter
+
+In:
+
+GET /api/bookings/123
+
+123 identifies a particular booking.
+
+Conceptually:
+
+/api/bookings/{bookingId}
+               ↑
+              123
+Query parameters
+
+Suppose we want bookings for a particular date:
+
+GET /api/bookings?date=2026-08-25
+
+Or:
+
+GET /api/bookings?status=confirmed
+
+These are query parameters.
+
+Interview Question
+
+You send:
+
+POST /api/bookings
+Authorization: Bearer VALID_TOKEN
+Content-Type: application/json
+
+with:
+
+{
+    "facilityId": 100,
+    "courtId": 5,
+    "date": "2026-08-25",
+    "startTime": "18:00"
+}
+
+But the API requires:
+
+durationHours
+
+and it is missing.
+
+As QA:
+
+1. What would you expect the API to do?
+
+2. Would you expect a booking to be created in the database?
+
+3. What would you validate in the response besides the HTTP status code?
+
+
+Answer: 1 and 3: I excpect to get a code 4XX which will say not full data in request cause need durationhours been part of json request 2.No booking been created - if created it is the BUG 
+
+Answer: 1 and 3: I excpect to get a code 4XX which will say not full data in request cause need durationhours been part of json request 2.No booking been created - if created 
+
+Correct. Your QA thinking is good here. 8.5/10.
+
+For #1, I'd be slightly more specific in an interview:
+
+“I expect a client-side validation error, probably 400 Bad Request or 422 Unprocessable Content, depending on the API contract, because the required durationHours field is missing.”
+
+For #2, exactly right:
+
+No booking should be created.
+
+And this is important: a negative API test shouldn't only check that you received an error. You should also verify that the failed request didn't cause unwanted side effects.
+
+For #3, you started correctly with the error message. I'd validate something like:
+
+{
+    "error": "durationHours is required"
+}
+
+I'd check the status code, response body/error message, correct field identified (durationHours), response schema/content type where relevant, and that no booking was created.
+
+For example, this would be a bad API behavior:
+
+POST /api/bookings
+missing durationHours
+
+
+↓
+400 Bad Request        ✅
+
+
+BUT
+
+
+booking created in DB  ❌❌❌
+
+The status code is correct, but the system is still broken.
+
+
+Part 6 — Positive vs Negative API testing
+
+Let's use POST /api/bookings.
+
+A lot of candidates test:
+
+valid request → 201
+
+and stop.
+
+A stronger QA Engineer asks:
+
+“How can I break this API?”
+
+For example:
+
+Missing durationHours
+durationHours = 0
+durationHours = -1
+durationHours = 4
+durationHours = "hello"
+
+
+Missing courtId
+Invalid courtId
+Non-existing courtId
+
+
+Start before 08:00
+End after 22:00
+
+
+Past date
+Occupied slot
+
+
+No authentication
+Wrong/expired token
+
+
+Customer tries booking forbidden facility
+
+That's where your manual QA knowledge from Day 1 connects directly to API automation.
+
+Your task
+
+Suppose the valid request is:
+
+{
+    "facilityId": 100,
+    "courtId": 5,
+    "date": "2026-08-25",
+    "startTime": "18:00",
+    "durationHours": 2
+}
+
+Give me 6 negative API tests you would run against POST /api/bookings.
+
+For each, just write:
+
+Test data → expected result/status
+
+Try to include input validation + authentication + business rules, not six versions of the same problem.
+
+Answer: facilityID - null - result 400 , startime 00:00 - 4XX , date 05-05-200 - 4XX, duration 0 hours - 4xx 
+
+
+Good start. All four are valid negative-test ideas. But I asked for six and specifically wanted you to cover different categories, so let's improve the coverage.
+
+Your four:
+
+facilityId = null → 400/422 ✅ Required-field/input validation.
+startTime = "00:00" → 400/422 ✅ Business rule: outside 08:00–22:00.
+Invalid/past date → 400/422 ✅ Date validation. Be precise whether you're testing an invalid format or a valid date in the past—they're different tests.
+durationHours = 0 → 400/422 ✅ Boundary validation.
+
+You're missing two especially important categories:
+
+Authentication:
+
+No authentication token
+→ 401 Unauthorized
+→ booking must NOT be created
+
+Conflict:
+
+Court 5 already booked 18:00–20:00
++
+request another booking 18:00–20:00
+→ 409 Conflict
+→ second booking must NOT be created
+
+That gives you much better coverage because you're testing:
+
+Input validation
+Business rules
+Boundaries
+Authentication
+Conflict/data integrity
+Interview tip
+
+Don't answer everything as simply “4xx.”
+
+4xx is technically a family of client errors, but an interviewer will often want to see whether you understand the difference:
+
+No authentication        → 401
+No permission            → 403
+Resource doesn't exist   → 404
+Booking conflict         → 409
+Invalid input            → 400/422 depending on contract
+
+Day 3 — Part 7: Postman
+
+We stopped at testing your login API.
+
+You have:
+
+POST http://127.0.0.1:3000/api/login
+
+Suppose we send:
+
+{
+    "email": "qa@test.com",
+    "password": "Test123"
+}
+
+and receive:
+
+200 OK
+
+with:
+
+{
+    "token": "abc123",
+    "user": {
+        "id": 25,
+        "email": "qa@test.com",
+        "role": "customer"
+    }
+}
+
+In Postman, as QA, we shouldn't just look at 200. We'd verify status, response data, headers, and potentially response time.
+
+For example:
+
+Status          → 200
+token           → exists and isn't empty
+user.id         → exists
+user.email      → qa@test.com
+user.role       → customer
+Content-Type    → application/json
+Response time   → reasonable
+Important scenario
+
+Now suppose Postman shows:
+
+200 OK
+
+but the response is:
+
+{
+    "token": "",
+    "user": null
+}
+🎤 Your interview question
+
+Would you consider this API test:
+
+PASS or FAIL?
+
+And explain why.
+
+Think about what you told me earlier: HTTP 200 doesn't necessarily mean the response is correct.
+
+Consider TEST is failed we should get 200 cause we didn't send in respoce the tocken so SERVER has a bag
+
+Correct — the test failed. One wording correction: we did receive 200, but the response body is incorrect.
+
+A strong interview answer:
+
+“The API test fails even though the HTTP status is 200. For successful login, I expect a valid non-empty authentication token and valid user information. Here the token is empty and user is null, so the response violates the expected API contract. I would report this as a backend/API bug.”
+
+Exactly the point from earlier:
+
+200 OK ≠ everything is correct
+
+We should validate both:
+
+Status code       → 200 ✅
+Response body     → ❌
+   token           → empty ❌
+   user            → null  ❌
+
+
+Overall test      → FAIL ❌
+
+
+Responce Time below 10ms and token exist tests from Postman:
+
+pm.test('Status is 200', () => pm.response.to.have.status(200));
+pm.test('Returns the authenticated user and token', () => {
+  const body = pm.response.json();
+  pm.expect(body.success).to.eql(true);
+  pm.expect(body.token).to.eql('demo-api-token');
+  pm.expect(body.user.email).to.eql(pm.environment.get('validEmail'));
+});
+
+pm.test("Response time is under 500ms", () => {
+  pm.expect(pm.response.responseTime).to.be.below(10);
+});
+
+const body = pm.response.json();
+pm.test("Token is returned", () => {    
+    pm.expect(body.token).to.not.be.null;   
+});
+
+pm.test("Token exists", function () {
+    pm.expect(body.token).to.exist;
+});
+
+pm.test("Token is not empty", function () {
+    pm.expect(body.token).to.be.a("string");
+    pm.expect(body.token).to.not.be.empty;
+});
+
+pm.test("Correct user returned - email matches", function () {
+    pm.expect(body.user.email).to.eql("dani@example.com");
+});
+
+Part 7.2 — Postman variables
+
+You don't want to repeat:
+
+http://127.0.0.1:3000
+
+in 50 requests.
+
+You can define a variable such as:
+
+baseUrl = http://127.0.0.1:3000
+
+Then requests become:
+
+POST {{baseUrl}}/api/login
+GET  {{baseUrl}}/api/bookings
+POST {{baseUrl}}/api/bookings
+
+This becomes especially useful when environments change:
+
+LOCAL
+baseUrl = http://127.0.0.1:3000
+
+
+STAGING
+baseUrl = https://staging.example.com
+
+
+PRODUCTION
+baseUrl = https://example.com
+
+Same collection, different environment/configuration.
+
+And we can do the same thing with authentication tokens.
+
+Login returns:
+
+{
+    "token": "ABC123"
+}
+
+We can save it into a Postman variable and later use:
+
+Authorization: Bearer {{token}}
+
+So the flow becomes:
+
+POST /api/login
+      ↓
+receive token
+      ↓
+save token
+      ↓
+POST /api/bookings
+Authorization: Bearer {{token}}
+
+This is a very common Postman interview topic.
+
+🎤 Your next question
+
+Suppose you have 30 Postman requests, and all currently contain:
+
+Authorization: Bearer ABC123XYZ
+
+hardcoded manually.
+
+Tomorrow the token expires.
+
+What is wrong with this design, and how would you improve it?
+
+Answer: Hardcoded is good for one two testing but for automation and CI is not good, and we need to use variables + thing about token rotation mechanizm.Token can be saved in the vault (even in the postman local vault)
+
+
+Good answer. 8.5/10. You caught the two main issues: maintainability and secret handling.
+
+A stronger interview version would be:
+
+“Hardcoding the token in 30 requests is fragile because when the token expires or changes, every request must be updated. I would authenticate once, extract the token from the login response, save it to an environment or collection variable, and reuse it as Bearer {{token}}. For sensitive secrets, I would avoid committing them into collections or source control and use an appropriate secret store or Postman Vault where available.”
+
+The key flow is:
+
+POST /api/login
+      ↓
+receive token
+      ↓
+save token variable
+      ↓
+all other requests use {{token}}
+
+For example, in a Postman script after login:
+
+const body = pm.response.json();
+
+
+pm.environment.set("token", body.token);
+
+Then later:
+
+Authorization: Bearer {{token}}
+
+One nuance: token rotation is more of an auth/security architecture topic. For a QA interview, the more immediate point is usually automatic login → extract token → reuse token → refresh/re-login when expired.

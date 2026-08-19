@@ -1,0 +1,110 @@
+{
+  "info": {
+    "_postman_id": "cb6ad7ae-55f0-4d76-b234-e9dafb3e3355",
+    "name": "Bond Sports API",
+    "description": "Postman checks for the local Bond Sports demo API. Start the server with `npm start` from ProjectA before running these requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login - success",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{validEmail}}\",\n  \"password\": \"{{validPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/login",
+        "description": "Authenticates the demo user and returns an API token."
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns the authenticated user and token', () => {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.success).to.eql(true);",
+            "  pm.expect(body.token).to.eql('demo-api-token');",
+            "  pm.expect(body.user.email).to.eql(pm.environment.get('validEmail'));",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "Login - invalid credentials",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"wrong@example.com\",\n  \"password\": \"wrong-password\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/login"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+            "pm.test('Returns an invalid credentials error', () => {",
+            "  pm.expect(pm.response.json()).to.eql({ error: 'Invalid email or password' });",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "Login - missing password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{validEmail}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/login"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+            "pm.test('Returns a validation error', () => {",
+            "  pm.expect(pm.response.json()).to.eql({ error: 'Email and password are required' });",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "Login - invalid JSON",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"email\": \"{{validEmail}}\",",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/login"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+            "pm.test('Rejects invalid JSON', () => {",
+            "  pm.expect(pm.response.json()).to.eql({ error: 'Request body must be valid JSON' });",
+            "});"
+          ]
+        }
+      }]
+    }
+  ]
+}

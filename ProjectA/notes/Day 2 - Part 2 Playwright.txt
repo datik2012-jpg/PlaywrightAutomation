@@ -1562,4 +1562,1215 @@ GET /bookings/123
 This can give us stronger validation than checking only a success message.
 
 
+ontinue with Day 2 — Part 6: API + UI together, because this is very relevant to the Bond role.
+
+Suppose the test is:
+
+Verify that a customer can cancel an existing booking.
+
+We have two possible setups.
+
+Option A — prepare everything through UI
+
+Login
+→ Find facility
+→ Select court
+→ Select time
+→ Book
+→ Pay
+→ Open calendar
+→ Find booking
+→ Cancel
+
+Option B — prepare with API, test cancellation in UI
+
+API creates booking
+→ Open booking page
+→ Click Cancel
+→ Verify cancellation
+
+For a test specifically focused on cancellation, I would usually prefer Option B.
+
+Why? Because the test becomes faster, more focused, and less flaky. If the booking creation flow breaks, I don't want my cancellation test to fail before it even reaches cancellation.
+
+This is a key automation-design idea:
+
+Use UI to test the behavior you care about. Use API/setup helpers for prerequisites when appropriate.
+
+For example:
+
+def test_cancel_booking(page, request):
+
+    response = request.post(
+        "/api/bookings",
+        data={
+            "courtId": 123,
+            "start": "2026-08-20T15:00",
+            "end": "2026-08-20T17:00"
+        }
+    )
+
+    assert response.ok
+
+    booking_id = response.json()["id"]
+
+    page.goto(f"/bookings/{booking_id}")
+
+    page.get_by_role("button", name="Cancel").click()
+
+    expect(
+        page.get_by_text("Booking cancelled")
+    ).to_be_visible()
+
+Interview Question #6
+
+The interviewer asks:
+
+“Why shouldn't every automated test be a full UI end-to-end test?”
+
+Give me 3–4 reasons.
+
+Answer: UI testing works slowly and takes time, in case we want to test API fast we can not use it we can not test only specific API in UI we need full flow and navigation,API no need browser and can run in the parrallel
+
+
+
+Yes — your core reasoning is correct. I’d give that 8/10. You identified the biggest issue: full UI E2E tests are slower and require much more setup/navigation than focused API tests.
+
+A stronger interview answer would be:
+
+“I wouldn’t make every automated test a full UI E2E test because UI tests are slower, more expensive to maintain, and have more points where they can fail. If I only need to validate an API business rule, I can test the API directly without opening a browser or navigating through unrelated screens. API tests are generally faster, so we can run many more of them and parallelize them efficiently. I would keep E2E tests mainly for critical user journeys where I need to verify that multiple components work together.”
+
+One extra point you should remember: UI tests tend to be more flaky because they depend on rendering, selectors, timing, network calls, animations, and multiple services.
+
+So conceptually:
+
+            E2E UI
+          /        \
+     fewer tests   critical flows
+        ↑
+   Integration/API
+        ↑
+      many tests
+        ↑
+      Unit tests
+
+This is related to the testing pyramid, which could absolutely come up in this interview.
+
+////////////////////// Part 7 — Network interception / mocking ////////////
+
+
+API errors are usually represented by HTTP status codes. The first digit tells you the general meaning.
+Main groups
+2xx — success
+3xx — redirect
+4xx — problem with the request/client
+5xx — problem on the server
+Common successful responses
+200 OK — Request succeeded.
+201 Created — A new resource was created.
+202 Accepted — Request accepted but processing is not finished.
+204 No Content — Request succeeded, but there is no response body.
+Common client errors: 4xx
+400 Bad Request — Invalid request data, malformed JSON, or missing fields.
+401 Unauthorized — Authentication is missing or invalid.
+403 Forbidden — You are authenticated but do not have permission.
+404 Not Found — Endpoint or requested resource does not exist.
+405 Method Not Allowed — Wrong HTTP method, such as GET instead of POST.
+406 Not Acceptable — Server cannot return the requested response format.
+408 Request Timeout — The request took too long.
+409 Conflict — Request conflicts with existing data, such as a duplicate booking.
+410 Gone — Resource existed before but was permanently removed.
+415 Unsupported Media Type — Wrong Content-Type, such as sending text instead of JSON.
+422 Unprocessable Entity — Request format is valid, but field values fail validation.
+429 Too Many Requests — Rate limit exceeded; wait before retrying.
+Easy distinction:
+401 = Who are you?
+403 = I know who you are, but you cannot do this.
+Common server errors: 5xx
+500 Internal Server Error — Unexpected server-side failure.
+501 Not Implemented — Server does not support this functionality.
+502 Bad Gateway — Gateway received an invalid response from another server.
+503 Service Unavailable — Server is overloaded, down, or under maintenance.
+504 Gateway Timeout — Another server did not respond in time.
+
+
+def test_login_api(request):
+
+    response = request.post(
+        "http://127.0.0.1:3000/api/login",
+        data={
+            "email": "test@test.com",
+            "password": "123456"
+        }
+    )
+
+    assert response.status == 200
+
+    body = response.json()
+
+    print(body)
+
+This is API testing.
+
+Flow:
+
+Playwright test
+    ↓
+POST /api/login
+    ↓
+Real backend
+    ↓
+200 response
+    ↓
+assert status == 200
+
+page.route() is only needed when you want to intercept or replace what the browser receives.
+
+Test like it fails (not fails but we simulate an error)
+
+Imagine clicking:
+
+Pay $100
+
+causes:
+
+POST /api/payments
+
+
+
+We want to test what happens when payment fails.
+
+def test_payment_failure(page):
+
+
+    def fail_payment(route):
+        route.fulfill(
+            status=500,
+            content_type="application/json",
+            body='{"error": "Payment failed"}'
+        )
+
+
+    page.route(
+        "**/api/payments",
+        fail_payment
+    )
+
+
+    page.goto("/checkout")
+
+
+    page.get_by_role(
+        "button",
+        name="Pay"
+    ).click()
+
+
+    expect(
+        page.get_by_text("Payment failed")
+    ).to_be_visible()
+
+Now we're testing a difficult condition without deliberately breaking the real payment service.
+
+So:
+
+request.post(...)
+
+= call and test the real API
+
+while:
+
+page.route(...)
+
+= intercept a browser request, usually for mocking or modifying it.
+
+
+////////////////////////// Part 8 — Parallel execution //////////////////
+
+Playwright tests can run in parallel, which reduces total execution time.
+
+Conceptually:
+
+Sequential:
+Test 1 → Test 2 → Test 3 → Test 4
+
+
+Parallel:
+Test 1 ┐
+Test 2 ├→ run at same time
+Test 3 ┤
+Test 4 ┘
+
+The important interview point is not only “parallel is faster.” You also need to think about test isolation.
+
+Bad example:
+
+Test 1 uses customer@test.com
+Test 2 uses customer@test.com
+Test 3 uses customer@test.com
+
+All three create/cancel bookings at the same time.
+
+They can interfere with each other.
+
+Better:
+
+Test 1 → unique user/data   like admin@mail.com
+Test 2 → unique user/data   like manager@mail.com
+Test 3 → unique user/data   like agent@mail.com
+
+Or use isolated test data and cleanup.
+
+
+
+Interview question
+
+Bond has 300 Playwright tests. When they enable parallel execution, many booking tests start failing randomly.
+
+What would you investigate first?
+
+Think about shared users, shared facilities, shared bookings, test data, and cleanup.
+
+Answer: I will start to check which user is used ,it can be the same login user used for book and the same user is canceling in the second flow,so user should be not shared like example (not for every flow of course).Shared facilities - raise codnition to book the same facility and date and time - can be the big issue in the bussiness logic, test data as well should be looked for example time is overlap and different users trying to book and expectation to get notification but the flow is failing,cleanup as well should be checjed cause if clean upi runs when another user tries to book it dlete the data
+
+
+Your best points were shared users, shared facilities/time slots, overlapping test data, and cleanup deleting data another test still needs. Those are classic causes of failures that appear only after parallel execution is enabled.
+
+A stronger interview version would be:
+
+“I would first check whether the tests share state or test data. For example, multiple tests may use the same user, facility, date, or time slot, so one test can create or cancel data that another test depends on. I would also review cleanup logic to make sure one test is not deleting shared data while another test is still using it. I’d make the tests independent by generating unique users/bookings/time slots where necessary and ensuring each test owns its own setup and cleanup.”
+
+That is a very good answer.
+
+///////////////////Parallel execution ///////////
+
+Need to install this for pythong playwright:
+
+cd D:\GitHub\PlaywrightAutomation\ProjectPython
+python -m pip install pytest-xdist
+
+
+
+Your parameterized login test already creates separate test cases:
+
+@pytest.mark.parametrize(
+    "email, password",
+    [
+        ("dani@walla.co.il", "noqwerty"),
+        ("tim@gmail.com", "zagafer123"),
+        ("kola@hotmail.com", "zfghtr34"),
+    ],
+)
+def test_login_with_parametrize(
+    login_page: Page,
+    email: str,
+    password: str,
+):
+    login_page.get_by_label("Email").fill(email)
+    login_page.get_by_label("Password").fill(password)
+    login_page.get_by_role(
+        "button",
+        name="Log In",
+    ).click()
+
+    expect(login_page).to_have_url(
+        "http://127.0.0.1:3000/courts.html"
+    )
+
+
+Run these cases using two parallel workers:
+
+
+python -m pytest tests/fixtured_login_pos_and_neg.py -k "login_with_parametrize" --browser chromium -n 2 -v
+
+-n 2 means:
+Worker 1 → one test case
+Worker 2 → another test case
+
+Use all available CPU workers:
+python -m pytest tests/fixtured_login_pos_and_neg.py -n auto
+Starting with -n 2 is safer. Too many simultaneous browsers can slow the computer down.
+Important rules for parallel tests
+Tests should not share:
+The same test user if they modify that user
+The same booking record
+The same temporary filename
+The same browser context
+State from a previous test
+Use unique data:
+import uuid
+
+unique_email = f"test-{uuid.uuid4()}@example.com"
+Playwright supplies each page test with an isolated browser context, but database and server data are still shared.
+Testing two users booking the same slot
+That is a concurrency test, not merely a test-suite speed improvement.
+The expected result should be:
+User A requests Court A at 18:00
+User B requests Court A at 18:00 simultaneously
+                    ↓
+One receives 201 Created
+One receives 409 Conflict
+Your current server does not yet have a booking API or persistent booking state, so this race-condition test cannot be implemented meaningfully yet. First, the server would need something like:
+POST /api/bookings
+with atomic conflict prevention. Then a concurrency test could send two requests and assert:
+assert sorted(statuses) == [201, 409]
+For now, you can practice ordinary parallel execution with:
+python -m pytest tests/fixtured_login_pos_and_neg.py -n 2
+
+
+Better uniq email:
+
+A full UUID makes a long email. You can use only its first eight characters:
+unique_id = uuid.uuid4().hex[:8]
+unique_email = f"test-{unique_id}@example.com"
+Possible result:
+test-a4f21c88@example.com
+Complete example:
+import uuid
+
+
+def test_registration(page):
+    unique_id = uuid.uuid4().hex[:8]
+    unique_email = f"test-{unique_id}@example.com"
+
+    print(unique_email)
+
+    page.get_by_label("Email").fill(unique_email)
+The important idea is:
+Each test creates its own unique email so parallel tests do not compete for the same account.
+
+////////////////////////Part 9 - Part 9 — Debugging flaky tests /////////
+
+Now imagine this:
+
+A Playwright test passes locally 10/10 times, but fails randomly in CI about 20% of the time.
+
+The wrong approach is:
+
+time.sleep(10)
+
+or:
+
+retry 10 times and ignore it
+
+Instead, investigate systematically.
+
+For Playwright, useful evidence includes:
+
+Playwright trace
+screenshot/video on failure
+console errors
+network requests/responses
+CI logs
+test data/state
+timing/race conditions
+environment differences
+CPU/memory pressure
+parallel-test interference
+
+A very common failure pattern is:
+
+page.get_by_role("button", name="Book").click()
+expect(page.get_by_text("Booking confirmed")).to_be_visible()
+
+Local machine: passes.
+
+CI: sometimes fails.
+
+You should ask:
+
+Did the click happen?
+Did the API request fire?
+What response came back?
+Was another test using the same slot?
+Was the confirmation actually rendered?
+Was there a frontend exception?
+
+That is debugging, not guessing.
+
+Interview Question #8
+
+The test fails only in CI with:
+
+TimeoutError: waiting for get_by_text("Booking confirmed")
+
+What are the first 4–5 things you would check?
+
+Answer: Will run test again and open do in UI to see if it happens and for which user.Will openc Console and use Postman to see responce and compare to when it works.Will ask what was the last change UI,Infra,Automation,Server...
+
+
+Good answer. You already have three strong debugging instincts: reproduce it, inspect the request/response, and check recent changes.
+
+I’d improve it slightly because for a Playwright CI failure, the interviewer will expect you to use Playwright-specific evidence first.
+
+A stronger 5-step answer would be:
+
+Re-run and reproduce the failure, ideally in the same CI environment or with the same user/test data.
+Open the Playwright trace/screenshot/video from the failed run to see what was actually on the page when Booking confirmed never appeared.
+Check the network request that should create the booking: did it fire, and did it return 200/201, 409, 500, or timeout?
+Check console errors and logs, including frontend errors and backend/service logs if available.
+Check shared test data / recent changes: another parallel test may have used the same slot/user, or a recent UI/backend/infra change may have introduced the issue.
+
+Your Postman idea is useful too, but I would use it after seeing what happened in the failing browser request. Postman can confirm whether the API itself works independently, but it doesn’t reproduce the exact browser state, auth, headers, or timing of the failed Playwright test.
+
+For the interview, you could say:
+
+“First I would reproduce the issue and inspect the Playwright trace and screenshot. Then I would check whether the booking API request was sent and what response it returned, review browser console errors and service logs, and verify that parallel tests are not sharing the same user or booking slot. Finally, I’d check recent changes in UI, backend, infrastructure, or automation that could explain why the confirmation no longer appears.”
+
+That’s a strong RCA answer.
+
+Next we can continue with Playwright trace, screenshots, and debugging tools, because that directly follows from this question.
+
+//////////////Day 2 — Part 10: Trace, screenshots, and debugging ////////////////
+
+
+rom ProjectPython:
+cd D:\GitHub\PlaywrightAutomation\ProjectPython
+Record only failed tests — recommended
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  --tracing retain-on-failure
+Playwright records each test but keeps trace.zip only when the test fails.
+Record every test
+Useful while learning:
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  --tracing on
+Traces are normally saved under:
+ProjectPython/test-results/
+Find them with:
+Get-ChildItem .\test-results -Recurse -Filter trace.zip
+Open a trace:
+playwright show-trace .\test-results\<test-folder>\trace.zip
+Replace <test-folder> with the folder shown by the previous command.
+You can also copy its full path:
+playwright show-trace "D:\GitHub\PlaywrightAutomation\ProjectPython\test-results\some-test-folder\trace.zip"
+Investigate one test
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  -k "login_with_parametrize" `
+  --browser chromium `
+  --tracing on
+What to inspect
+In Trace Viewer, review:
+Actions — every goto, fill, and click
+Before/After — page state around each action
+Errors — assertion or action failure
+Log — what Playwright waited for
+Network — requests and responses
+Console — browser JavaScript errors
+Source — exact Python line
+Call — locator, timing, and actionability checks
+For normal test runs, prefer:
+--tracing retain-on-failure
+It preserves useful failure evidence without storing traces for every passing test.
+
+
+
+Interview Question #9
+
+You open the failed Playwright trace and find this:
+
+Click "Book"                ✓
+POST /api/bookings          ✓
+Response: 201 Created       ✓
+Booking exists in API       ✓
+"Booking confirmed"         ✗ never appears
+
+Where would you investigate next, and what does this evidence tell you about the likely area of the problem?
+
+Answer: I will add to the code or to the command which execute the test playwright trace, i will open trace UI and look failed test and start to campare source and results , i might see some errors with respoce API 
+
+You’re on the right track, but in this specific scenario the trace already tells us something very important:
+
+Click "Book"           ✓
+POST /api/bookings     ✓
+Response: 201 Created  ✓
+Booking exists in API  ✓
+Confirmation UI        ✗
+
+So the backend booking flow appears to have succeeded. I would investigate the frontend/UI state next, not the API first.
+
+I’d check whether there is a JavaScript console error, whether the frontend correctly handles the 201 response, whether the confirmation component is rendered under a different selector/text, and whether some UI state update or navigation failed after the response. I’d also compare a successful run with the failed one in Trace Viewer.
+
+A stronger interview answer would be:
+
+“The trace shows that the click succeeded and the backend returned 201 Created, so I know the booking itself was created. I would next investigate the frontend: console errors, response handling, state update, and rendering of the confirmation message. I would compare a successful trace with the failed trace to see where the UI behavior differs.”
+
+The key debugging skill is to narrow the problem down:
+
+API failed       → investigate backend/network
+API succeeded
+UI failed        → investigate frontend/state/rendering
+
+That distinction is exactly what they may want to see in an RCA question.
+
+
+but can be return API 200 but with some wrong data
+
+Yes, absolutely. HTTP 200/201 only tells you that the server considered the request successful at the HTTP level. It does not prove the response data is correct.
+
+So in that trace, I would not stop at:
+
+POST /api/bookings → 201
+
+I would also inspect the response body.
+
+For example, maybe the API returns:
+
+{
+  "id": null,
+  "status": "confirmed"
+}
+
+or:
+
+{
+  "id": 123,
+  "status": "failed"
+}
+
+or even:
+
+{
+  "booking": {}
+}
+
+The HTTP status can still be 200 or 201, but the frontend may fail because required data is missing or inconsistent.
+
+A better debugging flow is:
+
+Request sent?
+↓
+HTTP status correct?
+↓
+Response body correct?
+↓
+Required fields present?
+↓
+Values correct?
+↓
+Frontend handles response correctly?
+↓
+UI renders expected result?
+
+For the booking example, I’d inspect fields such as:
+
+{
+  "id": 123,
+  "facilityId": 10,
+  "startTime": "15:00",
+  "endTime": "17:00",
+  "status": "confirmed"
+}
+
+and compare them with a successful run.
+
+That means your interview answer can be stronger:
+
+“Even if the API returns 200 or 201, I would inspect the response body because the data itself may be wrong or incomplete. I’d compare the failed response with a successful response and check required fields, values, and whether the frontend is processing them correctly.”
+
+////////////////Part 11 — Retries //////////////////////////////
+
+Suppose a test fails once because of a temporary issue, then passes on retry.
+
+Retries can be useful in CI, but they are not a fix for flaky tests.
+
+Bad mindset:
+
+Test fails randomly
+↓
+Set retries = 5
+↓
+Ignore problem
+
+Better mindset:
+
+Retry helps collect evidence
+↓
+If retry passes → investigate flakiness
+↓
+Find root cause
+↓
+Fix test/application/data issue
+
+Typical causes might be shared test data, unstable locators, asynchronous UI behavior, temporary backend issues, or CI resource pressure.
+
+A strong interview answer is:
+
+“Retries can reduce false negatives in CI, but I wouldn’t use them to hide flaky tests. If a test passes only on retry, I would investigate why the first run failed using trace, network data, logs, and test isolation.
+
+or Python pytest, install the retry plugin:
+cd D:\GitHub\PlaywrightAutomation\ProjectPython
+python -m pip install pytest-rerunfailures
+Retry all failed tests
+python -m pytest tests --reruns 2
+--reruns 2 means:
+Initial attempt
+→ retry 1 if failed
+→ retry 2 if still failed
+Maximum total executions: 3.
+Retry one test file
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  --reruns 2 `
+  -v
+Add delay between retries
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --reruns 2 `
+  --reruns-delay 1
+This waits one second before each retry.
+
+Combine retries with tracing
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  --reruns 2 `
+  --rerun-show-tracebacks `
+  --tracing retain-on-failure `
+  -v
+This:
+Retries failed tests twice
+Shows errors from retried attempts
+Keeps Playwright traces for failures
+Configure retries for the entire project
+Create ProjectPython/pytest.ini:
+[pytest]
+reruns = 2
+reruns_delay = 1
+Then normal commands automatically use retries:
+python -m pytest tests
+Important practice
+Retries should help identify intermittent failures, not hide real defects.
+Fails first, passes retry → flaky
+Fails every attempt       → genuine failure
+Passes first attempt      → stable
+Do not use retries to cover:
+Incorrect selectors
+Wrong assertions
+Missing test data
+Application bugs
+Tests that depend on execution order
+For TypeScript Playwright, retries are built in:
+npx playwright test --retries=2
+
+
+Continue after failures — default
+python -m pytest tests -v
+Example:
+test_login_success PASSED
+test_invalid_email FAILED
+test_missing_password PASSED
+test_booking PASSED
+The failure does not stop later tests.
+This works properly when each case is a separate test function or parameterized case.
+Stop after the first failure
+Use -x:
+python -m pytest tests -v -x
+Execution:
+test_login_success PASSED
+test_invalid_email FAILED
+STOP
+The remaining tests are not run.
+The long form is:
+python -m pytest tests --exitfirst
+Stop after a specific number of failures
+Stop after two failures:
+python -m pytest tests --maxfail=2
+Stop after three failures:
+python -m pytest tests --maxfail=3
+Use with your login tests
+Continue after failures:
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  -v
+Stop on the first failure:
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  -v `
+  -x
+Stop after two failures:
+python -m pytest tests/fixtured_login_pos_and_neg.py `
+  --browser chromium `
+  -v `
+  --maxfail=2
+With retries
+Retry twice, then stop if the test still fails:
+python -m pytest tests `
+  --reruns 2 `
+  -x `
+  -v
+Flow:
+Test fails
+→ retry 1
+→ retry 2
+→ still failed
+→ stop the suite
+If the retry passes, pytest continues.
+Important detail
+Fixture cleanup after yield still runs when using -x:
+@pytest.fixture
+def api_context(playwright):
+    context = playwright.request.new_context()
+
+    yield context
+
+    context.dispose()
+If a test fails:
+Test fails
+→ fixture cleanup runs
+→ pytest stops before starting another test
+Recommended use:
+Local debugging: -x gives fast feedback.
+Full regression or CI: continue running to discover all failures.
+Excessively noisy suite: use --maxfail=5.
+
+
+/////////////////////Part 12 — What should be UI vs API? ////////////////
+
+art 12 — What should be UI vs API?
+
+For Bond, think like this:
+
+Critical user journey: UI is important.
+
+Login
+→ choose facility
+→ book
+→ pay
+→ confirmation
+
+Business rule validation: API can often be better.
+
+Can user book occupied slot?
+Can booking duration exceed 3 hours?
+Can unauthorized user cancel another user's booking?
+
+Setup/cleanup: API is often preferable.
+
+Create test booking
+Create user
+Delete booking
+Prepare paid booking
+
+This gives you faster and more focused tests.
+
+
+/////////////////////////////////////////////////////
+
+
+
+Final Day 2 exercise
+
+Imagine you need to automate this Bond scenario:
+
+Logged-in customer books Court A for 18:00–20:00 and verifies the booking appears in the calendar.
+
+Design the test architecture.
+
+Tell me:
+
+What would go into a fixture?
+What would go into a Page Object?
+What would remain directly in the test?
+What assertions would you add?
+Would you log in through UI every time or use saved auth state?
+
+Answer conceptually; no need for perfect Python yet.
+
+Answer:
+What would go into a fixture? In the fiture i can put email,password,time 18:00-20:00, and valiation in the calendar (for example EXIST can be validate in the calendar as result)
+What would go into a Page Object? I think URL to the page first and later PAGE will include server responce and we cal validate this data
+What would remain directly in the test?  Page object 
+What assertions would you add? Validate login and textures been loaded, validate Court A 18-22 been booked, validate booked appears in the calendar
+Would you log in through UI every time or use saved auth state? We can save auth one time and use in the multiple tests (use fixtures)
+
+
+You’re close, but the responsibilities are mixed a little. This is important, so let’s clean it up.
+
+For this scenario:
+
+Customer books Court A from 18:00–20:00 and verifies it appears in the calendar.
+
+1. Fixture
+
+A fixture should prepare reusable test setup/resources.
+
+Good examples:
+
+authenticated customer/page
+test user
+maybe reusable test data
+cleanup after the test
+
+I would not normally put the assertion “booking exists in calendar” inside the fixture, because that is part of what the test is verifying.
+
+Also, hardcoding 18:00–20:00 inside a fixture is usually not ideal unless that fixture is specifically designed for that booking setup.
+
+2. Page Object
+
+The Page Object should know how to interact with the UI.
+
+For example:
+
+class BookingPage:
+    def __init__(self, page):
+        self.page = page
+        self.book_button = page.get_by_role("button", name="Book")
+        self.confirmation = page.get_by_text("Booking confirmed")
+
+
+    def open(self):
+        self.page.goto("/facilities")
+
+
+    def select_court(self, name):
+        self.page.get_by_text(name).click()
+
+
+    def select_time(self, time):
+        self.page.get_by_text(time).click()
+
+
+    def book(self):
+        self.book_button.click()
+
+The URL can absolutely be handled in the Page Object via something like open().
+
+But server responses usually do not belong in the Page Object unless you intentionally build network/API helpers there. I’d keep API logic separate from UI page objects.
+
+3. What remains in the test?
+
+The test should contain the actual business scenario.
+
+For example:
+
+def test_customer_can_book_court(customer_page):
+
+
+    booking = BookingPage(customer_page)
+
+
+    booking.open()
+    booking.select_court("Court A")
+    booking.select_time("18:00")
+    booking.book()
+
+
+    expect(booking.confirmation).to_be_visible()
+
+Then maybe navigate to calendar and assert the booking exists.
+
+So when you said:
+
+“Page object”
+
+not quite. The test creates/uses the Page Object, but the test itself should clearly describe the business flow.
+
+4. Assertions
+
+Your ideas here are good.
+
+I’d verify:
+
+booking confirmation appears
+Court A at 18:00–20:00 becomes unavailable/booked
+booking appears in the customer calendar
+
+I would not necessarily assert login again in this test if authentication is just setup and is already handled through saved auth state. Login should have its own tests.
+
+5. Authentication
+
+You got this right:
+
+Save authentication state once and reuse it for tests where login itself is not under test.
+
+That is a strong answer.
+
+So the clean separation is:
+
+Fixture
+→ prepare authenticated customer
+
+
+Page Object
+→ knows how to click/select/navigate
+
+
+Test
+→ Court A + 18:00–20:00 + Book + verify result
+
+
+Assertions
+→ confirmation + booked slot + calendar entry
+
+That separation is one of the most important things from Day 2.
+
+
+For Day 2 specifically, I’d currently put you around 7/10. Your QA reasoning is stronger than your Playwright architecture knowledge, which is normal given what we've covered.
+
+You’re doing well with locators (get_by_role and why stable locators matter), auto-waiting and why sleep() is bad, saved authentication state, parallel-test isolation, debugging CI failures, understanding API vs UI testing, and network interception after we walked through it.
+
+The areas that need more practice are fixtures vs Page Objects vs tests, yield/fixture lifecycle, deciding exactly what belongs in a POM, and writing Playwright code yourself rather than recognizing code I show you. Your last answer mixed these responsibilities—for example, calendar validation belongs primarily to the test/assertion layer, not the setup fixture.
+
+The good sign is that you keep challenging things that don't make sense—for example, asking where api_client came from, when a route handler actually executes, and whether a 200 response can contain incorrect data. Those are exactly the kinds of technical distinctions you need to understand rather than memorize.
+
+I wouldn't move to Day 3 yet. Let's spend another 30–45 minutes finishing Day 2 with actual coding: I'll give you a small Playwright task, you write the code, I'll review it like an interviewer, then we'll do 5 rapid-fire Playwright interview questions. After that, Day 2 is done.
+
+
+Coding Task 1 — Login
+
+Assume this page exists:
+
+http://127.0.0.1:3000/login
+
+The page has:
+
+Email:    [____________]
+Password: [____________]
+
+
+          [ Login ]
+
+After successful login, the user is redirected to:
+
+http://127.0.0.1:3000/dashboard
+
+and sees:
+
+Welcome
+Your task
+
+Write a Playwright Python test:
+
+def test_successful_login(page):
+
+The test should:
+
+Open /login.
+Enter email qa@test.com.
+Enter password Test123.
+Click Login.
+Verify the URL contains /dashboard.
+Verify Welcome is visible.
+
+Use what we learned:
+
+get_by_label
+get_by_role
+expect
+
+Don't worry about POM or fixtures yet. Write the simplest working test.
+
+Start from:
+
+from playwright.sync_api import Page, expect
+
+
+
+
+def test_successful_login(page: Page):
+   page.goto("http://127.0.0.1:3000/login")
+   
+   #here can be validation of header opened in the page
+   #and we can add if email and password is visible 
+   page.get_by_label("email").fill(qa@test.com)
+   page.get_by_label("password").fill(Test123)
+   page.get_by_role("button", name="Login").click()
+
+   expect(page).to_have_url("http://127.0.0.1:3000/dashboard")
+   #welcome =page.locator(".intro")
+   welcome = page.get_by_text("Welcome") #better use this a semantic and not locator relying on CSS class
+   expect(welcome).to_be_visible()
+   expect(welcome).to_have_text("Welcome")
+
+  welcome = page.get_by_text("Welcome")
+  expect(welcome).to_be_visible()
+
+clear version:
+
+
+from playwright.sync_api import Page, expect
+
+
+def test_successful_login(page: Page):
+    page.goto("http://127.0.0.1:3000/login")
+
+    page.get_by_label("email").fill("qa@test.com")
+    page.get_by_label("password").fill("Test123")
+
+    page.get_by_role(
+        "button",
+        name="Login"
+    ).click()
+
+    expect(page).to_have_url(
+        "http://127.0.0.1:3000/dashboard"
+    )
+
+    welcome = page.get_by_text("Welcome")
+
+    expect(welcome).to_be_visible()
+
+
+
+Coding Task 2 — Negative login
+
+Now I'll make it slightly harder.
+
+Requirement:
+
+If the user enters an incorrect password, login fails. The user stays on /login and sees "Invalid email or password".
+
+Write:
+
+def test_invalid_password(page: Page):
+
+Requirements:
+
+Open login.
+Enter qa@test.com.
+Enter the wrong password WRONG123.
+Click Login.
+Verify the user remains on /login.
+Verify Invalid email or password is visible.
+
+And one additional question:
+
+Would you use time.sleep() after clicking Login? Why or why not?
+
+
+
+def test_invalid_password(page: Page):
+    page.goto("http://127.0.0.1:3000/login")
+
+    page.get_by_label("email").fill("qa@test.com")
+    page.get_by_label("password").fill("WRONG123")
+
+    page.get_by_role(
+        "button",
+        name="Login"
+    ).click()
+    
+    expect(page).to_have_url(
+        "http://127.0.0.1:3000/login"
+    )
+
+    invalid_email = page.get_by_text("Invalid email or password")
+
+    expect(invalid_email).to_be_visible()
+
+will not use time sleep after login, cause this validation should be fast and on client side - not good answer
+
+Better:
+
+
+Your sleep conclusion is correct, but the reason isn't
+
+You said:
+
+“will not use time sleep ... because this validation should be fast and on client side”
+
+Be careful here.
+
+We don't actually know that authentication validation happens client-side.
+
+Most likely:
+
+Click Login
+    ↓
+POST /api/login
+    ↓
+Backend validates credentials
+    ↓
+401 Unauthorized
+    ↓
+Frontend displays error
+
+And you already told me your application has:
+
+POST http://127.0.0.1:3000/api/login
+
+So authentication may absolutely involve the backend.
+
+But we still don't need sleep().
+
+Why?
+
+Because:
+
+expect(invalid_email).to_be_visible()
+
+automatically waits up to the configured timeout for the condition to become true.
+
+So even if:
+
+POST /api/login
+takes 1.7 seconds
+
+the assertion waits for the UI state we actually care about.
+
+A stronger interview answer:
+
+“I wouldn't use sleep() because it's a fixed wait and makes the test slower and potentially flaky. Playwright assertions automatically wait for the expected condition. expect(error).to_be_visible() waits until the error appears or the timeout is reached.”
+
+🔥 Remember that answer.
+
+
+
+Coding Task 3 — Page Object Model
+
+Now let's test whether the POM concept clicked.
+
+We currently duplicated this:
+
+page.goto("http://127.0.0.1:3000/login")
+
+
+page.get_by_label("email").fill(...)
+page.get_by_label("password").fill(...)
+
+
+page.get_by_role(
+    "button",
+    name="Login"
+).click()
+
+in both tests.
+
+Create:
+
+class LoginPage:
+
+It should have:
+
+__init__
+open()
+login(email, password)
+
+Then I want the test to eventually look roughly like:
+
+def test_invalid_password(page: Page):
+
+
+    login_page = LoginPage(page)
+
+
+    login_page.open()
+    login_page.login(
+        "qa@test.com",
+        "WRONG123"
+    )
+
+
+    # assertions
+
+You write the LoginPage class yourself.
+
+Don't worry if it's imperfect — I want to see whether you understand what belongs in the Page Object now.
+
+
+  
+   
+
+
+
 

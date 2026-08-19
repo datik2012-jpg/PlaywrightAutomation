@@ -1,0 +1,323 @@
+HTTP Status Codes — QA Interview Cheat Sheet
+2xx — Success
+Code	Meaning	QA example
+200 OK	Request succeeded	Successful login, GET /bookings
+201 Created	New resource created	POST /bookings creates booking
+202 Accepted	Request accepted, processing may happen later	Async report/refund job accepted
+204 No Content	Success, no response body	Successful DELETE
+
+Easy memory:
+
+200 → OK
+201 → Created
+202 → Accepted for processing
+204 → Success, nothing returned
+3xx — Redirects
+Code	Meaning	Example
+301	Permanent redirect	Old URL permanently moved
+302	Temporary redirect	Temporary redirect
+304	Not Modified	Browser can use cached version
+
+These are less important for your interview, but know what 3xx = redirect/cache behavior means.
+
+4xx — Client/request problems
+
+These are very important for QA API testing.
+
+400 — Bad Request
+
+The request is invalid.
+
+Example:
+
+{
+    "durationHours": "banana"
+}
+
+Possible response:
+
+400 Bad Request
+
+Think:
+
+Something is wrong with what I sent.
+
+401 — Unauthorized
+
+Despite the name, think primarily:
+
+Authentication is missing or invalid.
+
+Example:
+
+GET /api/bookings
+
+without the required token:
+
+401 Unauthorized
+
+Another example:
+
+Authorization: Bearer EXPIRED_TOKEN
+
+→ 401
+
+Memory:
+
+401 → Who are you?
+403 — Forbidden
+
+The server knows who you are, but you don't have permission.
+
+Example:
+
+Logged-in customer
+       ↓
+DELETE /api/admin/users/123
+       ↓
+403 Forbidden
+
+Memory:
+
+401 → I don't know/accept your identity.
+
+
+403 → I know who you are.
+      You're not allowed.
+
+This distinction is important.
+
+404 — Not Found
+
+The requested resource doesn't exist.
+
+GET /api/bookings/999999
+
+If booking 999999 doesn't exist:
+
+404 Not Found
+
+It's different from 400.
+
+The request itself can be perfectly valid:
+
+GET booking #999999
+
+There's simply no such booking.
+
+405 — Method Not Allowed
+
+The endpoint exists, but you're using an unsupported HTTP method.
+
+Suppose:
+
+GET /api/login
+
+but the endpoint only allows:
+
+POST /api/login
+
+You might receive:
+
+405 Method Not Allowed
+
+This is useful in API negative testing.
+
+408 — Request Timeout
+
+The server timed out waiting for the request.
+
+408 Request Timeout
+
+Don't confuse this with every kind of network timeout; different layers can produce different failures.
+
+409 — Conflict 🔥
+
+Very relevant to a booking system.
+
+Existing:
+
+Court A
+18:00–20:00
+BOOKED
+
+Another request:
+
+POST /api/bookings
+
+for:
+
+Court A
+18:00–20:00
+
+Possible result:
+
+409 Conflict
+
+Meaning:
+
+Your request conflicts with the current state of the system.
+
+This is one I'd remember for Bond.
+
+415 — Unsupported Media Type
+
+For example, API expects:
+
+Content-Type: application/json
+
+but you send something unsupported:
+
+Content-Type: text/plain
+
+Possible:
+
+415 Unsupported Media Type
+422 — Unprocessable Content
+
+The request may be syntactically understandable, but the data fails validation/business rules.
+
+For example:
+
+{
+    "durationHours": 0
+}
+
+The JSON itself is valid.
+
+But business rules say:
+
+minimum = 1 hour
+
+An API might return:
+
+422 Unprocessable Content
+
+Whether an API uses 400 or 422 for a particular validation failure depends on its API contract.
+
+429 — Too Many Requests
+
+Rate limiting.
+
+Imagine you send:
+
+1000 login requests very quickly
+
+The API may respond:
+
+429 Too Many Requests
+
+Meaning:
+
+Slow down; you've exceeded the allowed request rate.
+
+5xx — Server problems
+
+These are also important.
+
+500 — Internal Server Error
+
+Something unexpected failed on the server.
+
+POST /api/bookings
+       ↓
+Backend crashes
+       ↓
+500 Internal Server Error
+
+As QA, 500 is often something worth investigating because normal invalid user input generally should be handled gracefully rather than crashing the server.
+
+502 — Bad Gateway
+
+A gateway/proxy received a bad response from an upstream service.
+
+Conceptually:
+
+Browser
+   ↓
+Gateway
+   ↓
+Booking Service ❌
+   ↓
+502
+503 — Service Unavailable
+
+Service is temporarily unavailable.
+
+For example:
+
+Payment Service
+     ↓
+unavailable/overloaded
+     ↓
+503 Service Unavailable
+504 — Gateway Timeout
+
+A gateway/proxy waited too long for an upstream service.
+
+Gateway
+   ↓
+waits for Payment Service
+   ↓
+...
+...
+no response
+   ↓
+504 Gateway Timeout
+The codes I want you to memorize
+
+For this interview, prioritize these:
+
+200 → OK
+201 → Created
+204 → Success, no content
+
+
+400 → Bad Request
+401 → Authentication problem
+403 → Authenticated but forbidden
+404 → Resource not found
+405 → Method not allowed
+409 → Conflict
+415 → Unsupported media type
+422 → Validation/unprocessable content
+429 → Too many requests
+
+
+500 → Internal server error
+502 → Bad gateway
+503 → Service unavailable
+504 → Gateway timeout
+
+And especially memorize this sequence:
+
+400 → Bad request
+401 → Not authenticated
+403 → No permission
+404 → Not found
+
+
+409 → Conflict
+422 → Validation
+
+
+500 → Server failed
+503 → Service unavailable
+
+For the Bond interview, if they give you booking already occupied, you should immediately think:
+
+409 Conflict
+
+If they give you logged-in customer trying an admin operation:
+
+403 Forbidden
+
+If there's no/invalid authentication:
+
+401 Unauthorized
+
+If they request booking ID that doesn't exist:
+
+404 Not Found
+
+That's enough HTTP knowledge to handle most QA interview questions.
