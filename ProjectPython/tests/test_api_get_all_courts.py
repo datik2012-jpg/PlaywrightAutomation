@@ -44,51 +44,59 @@ def test_invalid_body_login(api_context: APIRequestContext) -> None:
     assert body["error"] == "Invalid email or password"
     
     
-def test_bookings(api_context: APIRequestContext) -> None:
-    response = api_context.post("api/login", data={"email": "dani@example.com", "password": "nopassword"},)    
-      
+def test_get_all_courts(api_context: APIRequestContext) -> None:
+    response_login = api_context.post("api/login", data={"email": "dani@example.com", "password": "1234567"},)    
+    
+    body = response_login.json()
 
-
-def test_api_login_success(api_context: APIRequestContext) -> None:
-    response = api_context.post(
-        "/api/login",
-        data={
-            "email": "dani@example.com",
-            "password": "1234567",
-        },
+    token = body["token"]
+    
+    print(f"Print body: {body}")
+    print(f"token is: {token}")
+    
+    
+    #get all courts
+    
+    response_courts = api_context.get(
+      "/api/courts",
+      headers={"Authorization": f"Bearer {token}"},
     )
+    
+    assert response_courts.status == 200
+    assert response_courts.ok is True
 
-    expect(response).to_be_ok()
-    assert response.status == 200
-    assert response.json() == {
-        "success": True,
-        "token": "demo-api-token",
-        "user": {"email": "dani@example.com"},
-    }
+    courts_body = response_courts.json()
+    assert courts_body["success"] is True
+    assert len(courts_body["courts"]) == 2
 
+    print(response_courts.status)
+    print(response_courts.text())
+    
+    
+    
+def test_negative_token_courts(api_context: APIRequestContext) -> None:
+    response_login = api_context.post("api/login", data={"email": "dani@example.com", "password": "1234567"},)    
+    
+    body = response_login.json()
 
-def test_api_login_rejects_invalid_credentials(
-    api_context: APIRequestContext,
-) -> None:
-    response = api_context.post(
-        "/api/login",
-        data={
-            "email": "wrong@example.com",
-            "password": "wrong-password",
-        },
+    token = "" #no token
+    
+    print(f"Print body: {body}")
+    print(f"token is: {token}")
+    
+    
+    #get all courts
+    
+    response_courts = api_context.get(
+      "/api/courts",
+      headers={"Authorization": f"Bearer {token}"},
     )
+    
+    assert response_courts.status == 401
+    assert response_courts.ok is False
+    assert response_courts.json()["error"] == "Unauthorized"
 
-    assert response.status == 401
-    assert response.json() == {"error": "Invalid email or password"}
+    courts_body = response_courts.json()
 
-
-def test_api_login_requires_email_and_password(
-    api_context: APIRequestContext,
-) -> None:
-    response = api_context.post(
-        "/api/login",
-        data={"email": "dani@example.com"},
-    )
-
-    assert response.status == 400
-    assert response.json() == {"error": "Email and password are required"}
+    print(response_courts.status)
+    print(response_courts.text())    

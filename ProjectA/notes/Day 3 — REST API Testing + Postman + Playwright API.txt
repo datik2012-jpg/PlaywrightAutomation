@@ -759,3 +759,1948 @@ Then later:
 Authorization: Bearer {{token}}
 
 One nuance: token rotation is more of an auth/security architecture topic. For a QA interview, the more immediate point is usually automatic login → extract token → reuse token → refresh/re-login when expired.
+
+
+
+Great — continuing Day 3, Part 7.3: Chaining API requests in Postman.
+
+Suppose this request creates a booking:
+
+POST {{baseUrl}}/api/bookings
+
+and returns:
+
+{
+  "id": 456,
+  "status": "confirmed"
+}
+
+Instead of hardcoding 456 in the next request, save it from the response:
+
+const body = pm.response.json();
+
+
+pm.environment.set("bookingId", body.id);
+
+Then your next request can be:
+
+GET {{baseUrl}}/api/bookings/{{bookingId}}
+
+Now the flow is:
+
+POST /api/bookings
+        ↓
+response id = 456
+        ↓
+save bookingId = 456
+        ↓
+GET /api/bookings/{{bookingId}}
+        ↓
+validate booking
+
+You can continue further:
+
+POST /api/login
+   ↓ save token
+
+
+POST /api/bookings
+   ↓ save bookingId
+
+
+GET /api/bookings/{{bookingId}}
+   ↓ validate
+
+
+DELETE /api/bookings/{{bookingId}}
+   ↓ cleanup
+
+This is useful because your tests become dynamic and reusable.
+
+Interview question
+
+Imagine POST /api/bookings returns:
+
+{
+  "id": 456,
+  "status": "confirmed"
+}
+
+What would you validate before saving bookingId and using it in the next request?
+
+Think about more than just status == 201.
+
+
+Yes, correct. I'd give this 7.5/10 because the idea is right, but in an interview I'd want you to be more specific about exactly what you're validating.
+
+Before saving bookingId, I would check:
+
+HTTP status       → 201
+Response is JSON  → correct Content-Type
+id                → exists
+id                → not null
+id                → expected type
+status            → "confirmed"
+booking data      → matches what I requested
+
+For example, if I sent:
+
+{
+  "courtId": 5,
+  "startTime": "18:00",
+  "durationHours": 2
+}
+
+and received:
+
+{
+  "id": 456,
+  "courtId": 7,
+  "startTime": "18:00",
+  "durationHours": 2,
+  "status": "confirmed"
+}
+
+then despite getting 201, the test fails because I requested Court 5 and the server created a booking for Court 7.
+
+In Postman, conceptually:
+
+const body = pm.response.json();
+
+
+pm.test("Booking created", function () {
+    pm.response.to.have.status(201);
+});
+
+
+pm.test("Booking ID exists", function () {
+    pm.expect(body.id).to.exist;
+    pm.expect(body.id).to.not.be.null;
+});
+
+
+pm.test("Booking is confirmed", function () {
+    pm.expect(body.status).to.eql("confirmed");
+});
+
+Only after validation:
+
+pm.environment.set("bookingId", body.id);
+
+A strong interview sentence is:
+
+“Before chaining the next request, I validate that the current request actually succeeded and that the response contains valid expected data. Otherwise I may save an invalid ID and cause all following requests to fail, hiding the original problem.”
+
+Part 8 — Playwright API testing
+
+Now we're moving from Postman back to Playwright Python.
+
+Postman:
+
+POST /api/login
+→ inspect response
+
+Playwright can do the same thing programmatically.
+
+Using your real endpoint:
+
+def test_login_api(request):
+
+
+    response = request.post(
+        "http://127.0.0.1:3000/api/login",
+        data={
+            "email": "qa@test.com",
+            "password": "Test123"
+        }
+    )
+
+
+    assert response.status == 200
+
+Then parse JSON:
+
+body = response.json()
+
+and validate it:
+
+assert body["token"] is not None
+assert body["token"] != ""
+
+If the response contains:
+
+{
+    "token": "ABC123",
+    "user": {
+        "email": "qa@test.com"
+    }
+}
+
+we could also check:
+
+assert body["user"]["email"] == "qa@test.com"
+
+Notice something important:
+
+page
+
+is for browser/UI testing.
+
+request
+
+is for API requests.
+
+So:
+
+def test_login_ui(page):
+    ...
+
+versus:
+
+def test_login_api(request):
+    ...
+
+No browser is required for the second test.
+
+However, there's an important issue: with the standard Playwright pytest plugin, the fixture is commonly named api_request_context, not just request. request can also mean pytest's own request fixture, which is a completely different thing.
+
+So for clarity, I'd teach you this version:
+
+from playwright.sync_api import APIRequestContext
+
+
+
+
+def test_login_api(api_request_context: APIRequestContext):
+
+
+    response = api_request_context.post(
+        "http://127.0.0.1:3000/api/login",
+        data={
+            "email": "qa@test.com",
+            "password": "Test123"
+        }
+    )
+
+
+    assert response.status == 200
+
+
+    body = response.json()
+
+
+    assert body["token"] is not None
+    assert body["token"] != ""
+    assert body["user"]["email"] == "qa@test.com"
+
+Now compare it with the Python Playwright UI code you already learned:
+
+from playwright.sync_api import Page, expect
+
+
+
+
+def test_login_ui(page: Page):
+
+
+    page.goto("http://127.0.0.1:3000/login")
+
+
+    page.get_by_label("email").fill("qa@test.com")
+    page.get_by_label("password").fill("Test123")
+
+
+    page.get_by_role(
+        "button",
+        name="Login"
+    ).click()
+
+
+    expect(page).to_have_url(
+        "http://127.0.0.1:3000/dashboard"
+    )
+
+The difference is simply:
+
+UI test
+Page
+↓
+page.goto()
+page.get_by_role()
+page.click()
+expect(locator)...
+
+
+API test
+APIRequestContext
+↓
+api_request_context.get()
+api_request_context.post()
+response.status
+response.json()
+
+
+Your turn — Coding Task
+
+Complete this API test:
+
+def test_login_api(request):
+
+
+    response = request.post(
+        "http://127.0.0.1:3000/api/login",
+        data={
+            "email": "qa@test.com",
+            "password": "Test123"
+        }
+    )
+
+
+    # YOUR ASSERTIONS
+
+I want you to validate:
+
+Status is 200.
+Parse the JSON.
+Token exists.
+Token isn't empty.
+User email is qa@test.com.
+
+Write the five checks yourself.
+
+
+
+def ttest_login_api(api_context: APIRequestContext) -> None: response = api_context.post("api/login", data={"email": "dani@example.com", "password": "1234567"},) expect(response).to_be_ok() assert response.status == 200 body = response.json() print(body) #test assert body["success"] is not None assert body["token"] is not None assert body["token"] != "" assert body["user"]["email"] == "dani@example.com"
+
+
+
+Yes — this is much better and clearly Python Playwright API testing. Your structure is correct. I'd give it 8.5/10.
+
+There are a few things to fix/improve.
+
+1. Typo in the test name
+
+You wrote:
+
+def ttest_login_api(...)
+
+Pytest normally discovers tests beginning with test_, so:
+
+def test_login_api(api_context: APIRequestContext) -> None:
+
+Otherwise pytest may not execute it.
+
+2. expect(response).to_be_ok() + status == 200
+
+You have:
+
+expect(response).to_be_ok()
+assert response.status == 200
+
+This isn't wrong, but understand the difference.
+
+expect(response).to_be_ok()
+
+checks that the response is successful (2xx).
+
+Whereas:
+
+assert response.status == 200
+
+specifically requires 200.
+
+For a login API where the contract says exactly 200, I'd definitely keep:
+
+assert response.status == 200
+
+You don't necessarily need both.
+
+3. This assertion could be stronger
+
+You wrote:
+
+assert body["success"] is not None
+
+Suppose the API returns:
+
+{
+    "success": false
+}
+
+false is not None, so your assertion passes!
+
+But login actually failed.
+
+If the expected contract is:
+
+{
+    "success": true
+}
+
+then test exactly that:
+
+assert body["success"] is True
+
+That's an important QA lesson:
+
+Don't only verify that a field exists when its value matters.
+
+4. Token validation
+
+This:
+
+assert body["token"] is not None
+assert body["token"] != ""
+
+works.
+
+You could simplify it to:
+
+assert body["token"]
+
+but for an interview I actually like the explicit version because it's immediately understandable.
+
+You could make it even stronger:
+
+assert isinstance(body["token"], str)
+assert body["token"] != ""
+
+Now you're checking:
+
+exists/value → string → non-empty
+Clean version
+from playwright.sync_api import APIRequestContext, expect
+
+
+
+
+def test_login_api(api_context: APIRequestContext) -> None:
+
+
+    response = api_context.post(
+        "api/login",
+        data={
+            "email": "dani@example.com",
+            "password": "1234567"
+        }
+    )
+
+
+    assert response.status == 200
+
+
+    body = response.json()
+
+
+    assert body["success"] is True
+    assert body["token"] is not None
+    assert body["token"] != ""
+    assert body["user"]["email"] == "dani@example.com"
+
+One thing to remember: "api/login" works only if your api_context was created with an appropriate base_url. Otherwise you'd use the full URL.
+
+
+
+Day 3 — Part 8.1: Negative API test
+
+Now let's see if you can write this yourself.
+
+Same endpoint:
+
+POST /api/login
+
+but send:
+
+email = "dani@example.com"
+password = "WRONG_PASSWORD"
+
+Assume the API contract says:
+
+401 Unauthorized
+
+and:
+
+{
+    "success": false,
+    "error": "Invalid email or password"
+}
+
+Write the Python Playwright API test yourself.
+
+I want you to verify:
+
+status → 401
+success → False
+error → "Invalid email or password"
+
+And think about one more thing:
+
+Should we assert that token does NOT exist/is not returned for failed authentication?
+
+
+
+Answer:
+
+#negative api testing -server.js is set return 401 error
+def test_body_login(api_context: APIRequestContext) -> None:
+    response = api_context.post("api/login", data={"email": "dani@example.com", "password": "nopassword"},)
+    assert response.status == 401
+    assert response.ok is False
+    body = response.json()
+    print(body)  
+    
+    assert response.json() == {'error': 'Invalid email or password'}
+
+Yes. This is a good negative API test. And because you're testing against your actual server.js contract, your assertion should match what your server really returns rather than the hypothetical JSON I gave you.
+
+Your code:
+
+def test_body_login(api_context: APIRequestContext) -> None:
+    response = api_context.post(
+        "api/login",
+        data={
+            "email": "dani@example.com",
+            "password": "nopassword"
+        },
+    )
+
+
+    assert response.status == 401
+    assert response.ok is False
+
+
+    body = response.json()
+    print(body)
+
+
+    assert response.json() == {
+        "error": "Invalid email or password"
+    }
+One improvement
+
+You already did:
+
+body = response.json()
+
+so don't parse it again here:
+
+assert response.json() == ...
+
+Just use:
+
+assert body == {
+    "error": "Invalid email or password"
+}
+
+So:
+
+def test_invalid_login(api_context: APIRequestContext) -> None:
+    response = api_context.post(
+        "api/login",
+        data={
+            "email": "dani@example.com",
+            "password": "nopassword"
+        },
+    )
+
+
+    assert response.status == 401
+    assert response.ok is False
+
+
+    body = response.json()
+
+
+    assert body == {
+        "error": "Invalid email or password"
+    }
+
+I would also rename:
+
+test_body_login
+
+to something describing the business behavior:
+
+test_invalid_login
+
+or:
+
+test_login_with_wrong_password
+
+So:
+
+def test_invalid_login(api_context: APIRequestContext) -> None:
+    response = api_context.post(
+        "api/login",
+        data={
+            "email": "dani@example.com",
+            "password": "nopassword"
+        },
+    )
+
+
+    assert response.status == 401
+    assert response.ok is False
+
+
+    body = response.json()
+
+
+    assert body == {
+        "error": "Invalid email or password"
+    }
+
+I would also rename:
+
+test_body_login
+
+to something describing the business behavior:
+
+test_invalid_login
+
+or:
+
+test_login_with_wrong_password
+
+That makes CI reports much clearer.
+
+One interesting QA decision
+
+There are two ways you could validate the response.
+
+Strict:
+
+assert body == {
+    "error": "Invalid email or password"
+}
+
+This means the entire response must be exactly this.
+
+If tomorrow the backend adds:
+
+{
+    "error": "Invalid email or password",
+    "code": "INVALID_CREDENTIALS"
+}
+
+your test fails.
+
+Alternatively, you could check only the contract you're interested in:
+
+assert body["error"] == "Invalid email or password"
+
+Then adding "code" wouldn't break the test.
+
+Neither approach is universally correct. It depends on whether the exact response schema is part of what you're testing.
+
+////////////////////////Day 3 — Part 8.2: API authentication ////////////
+
+
+Day 3 — Part 8.2: API authentication
+
+Now let's connect your two tests.
+
+Your successful login returns a token:
+
+body = response.json()
+
+
+token = body["token"]
+
+Imagine we now have:
+
+GET api/bookings
+
+and it requires:
+
+Authorization: Bearer <token>
+
+Conceptually we want:
+
+POST api/login
+      ↓
+200
+      ↓
+extract token
+      ↓
+GET api/bookings
+Authorization: Bearer token
+      ↓
+200
+
+With Python Playwright, you can send headers with the request.
+
+Your next coding task
+
+Don't worry about perfect syntax yet.
+
+Write conceptually how you would:
+
+Call POST api/login.
+Extract token.
+Call GET api/bookings using that token in the Authorization header.
+Expect 200.
+
+
+A cleaned-up version:
+
+def test_get_all_courts(api_context: APIRequestContext) -> None:
+    response_login = api_context.post(
+        "api/login",
+        data={
+            "email": "dani@example.com",
+            "password": "1234567"
+        },
+    )
+
+
+    assert response_login.status == 200
+
+
+    login_body = response_login.json()
+
+
+    token = login_body["token"]
+
+
+    assert token is not None
+    assert token != ""
+
+
+    response_courts = api_context.get(
+        "/api/courts",
+        headers={
+            "Authorization": f"Bearer {token}"
+        },
+    )
+
+
+    assert response_courts.status == 200
+    assert response_courts.ok is True
+
+
+    courts_body = response_courts.json()
+
+
+    assert courts_body["success"] is True
+    assert len(courts_body["courts"]) > 0
+
+
+Next: API/UI integration
+
+Example Bond-style flow:
+
+API → create booking
+UI → open calendar
+UI → verify booking appears
+
+or the opposite:
+
+UI → create booking
+API → GET booking
+API → verify backend data
+
+This is useful because it proves the UI and backend are consistent.
+
+We should do one practical exercise now:
+
+Use the UI to create a court booking, then call the API to verify that the same booking exists with the correct court, time, and status.
+
+Example not related to the task use UI and API:
+
+from playwright.sync_api import Page, Playwright, expect
+
+
+def test_ui_matches_courts_api(
+    page: Page,
+    playwright: Playwright,
+) -> None:
+    # Login using the UI
+    page.goto("http://127.0.0.1:3000")
+
+    page.get_by_label("Email").fill("dani@example.com")
+    page.get_by_label("Password").fill("1234567")
+    page.get_by_role("button", name="Log In").click()
+
+    expect(page).to_have_url(
+        "http://127.0.0.1:3000/courts.html"
+    )
+
+    # Login through the API to obtain a token
+    api = playwright.request.new_context(
+        base_url="http://127.0.0.1:3000"
+    )
+
+    login_response = api.post(
+        "/api/login",
+        data={
+            "email": "dani@example.com",
+            "password": "1234567",
+        },
+    )
+
+    assert login_response.status == 200
+    token = login_response.json()["token"]
+
+    # Retrieve court data through the API
+    courts_response = api.get(
+        "/api/courts",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert courts_response.status == 200
+    courts = courts_response.json()["courts"]
+
+    # Compare API data with the UI
+    for court in courts:
+        court_card = page.get_by_role(
+            "article",
+            name=court["name"],
+        )
+
+        expect(court_card).to_contain_text(court["name"])
+        expect(court_card).to_contain_text(court["status"])
+        expect(court_card).to_contain_text(court["time"])
+
+    api.dispose()
+
+
+but generaly if i need create E2E flow from the test ,how to do this correct .User Login first,then navigate in the menu to some place, do booking proceed to anothe menu
+
+
+
+
+
+
+
+3:00 PM
+
+
+
+
+
+
+For a real E2E test, verify one complete business journey from the user’s perspective:
+Login → navigate to courts → create booking → open My Bookings → verify booking
+Use the UI for the important user actions. Use API calls mainly for setup, cleanup, or additional backend verification.
+A clean project structure could be:
+ProjectPython/
+├── pages/
+│   ├── login_page.py
+│   ├── courts_page.py
+│   └── bookings_page.py
+├── tests/
+│   ├── conftest.py
+│   └── test_booking_e2e.py
+└── test_data/
+    └── users.py
+Page objects
+pages/login_page.py:
+from playwright.sync_api import Page, expect
+
+
+class LoginPage:
+    def __init__(self, page: Page):
+        self.page = page
+        self.email = page.get_by_label("Email")
+        self.password = page.get_by_label("Password")
+        self.login_button = page.get_by_role(
+            "button",
+            name="Log In",
+        )
+
+    def open(self) -> None:
+        self.page.goto("/")
+
+    def login(self, email: str, password: str) -> None:
+        self.email.fill(email)
+        self.password.fill(password)
+        self.login_button.click()
+
+    def verify_login_successful(self) -> None:
+        expect(self.page).to_have_url("/courts.html")
+pages/courts_page.py:
+from playwright.sync_api import Page, expect
+
+
+class CourtsPage:
+    def __init__(self, page: Page):
+        self.page = page
+
+    def book_court(
+        self,
+        court_name: str,
+        booking_time: str,
+    ) -> None:
+        court = self.page.get_by_role(
+            "article",
+            name=court_name,
+        )
+
+        expect(court).to_contain_text("Available")
+        expect(court).to_contain_text(booking_time)
+
+        court.get_by_role("button", name="Book").click()
+
+    def open_my_bookings(self) -> None:
+        self.page.get_by_role(
+            "link",
+            name="My Bookings",
+        ).click()
+pages/bookings_page.py:
+from playwright.sync_api import Page, expect
+
+
+class BookingsPage:
+    def __init__(self, page: Page):
+        self.page = page
+
+    def verify_booking(
+        self,
+        court_name: str,
+        booking_time: str,
+    ) -> None:
+        booking = self.page.get_by_role(
+            "article",
+            name=court_name,
+        )
+
+        expect(booking).to_contain_text(court_name)
+        expect(booking).to_contain_text(booking_time)
+        expect(booking).to_contain_text("Confirmed")
+E2E test
+tests/test_booking_e2e.py:
+from playwright.sync_api import Page
+
+from pages.bookings_page import BookingsPage
+from pages.courts_page import CourtsPage
+from pages.login_page import LoginPage
+
+
+def test_user_can_login_and_book_court(page: Page) -> None:
+    login_page = LoginPage(page)
+    courts_page = CourtsPage(page)
+    bookings_page = BookingsPage(page)
+
+    # Step 1: Login
+    login_page.open()
+    login_page.login(
+        email="dani@example.com",
+        password="1234567",
+    )
+    login_page.verify_login_successful()
+
+    # Step 2: Book a court
+    courts_page.book_court(
+        court_name="Court A",
+        booking_time="18:00",
+    )
+
+    # Step 3: Navigate to another area
+    courts_page.open_my_bookings()
+
+    # Step 4: Verify the business result
+    bookings_page.verify_booking(
+        court_name="Court A",
+        booking_time="18:00",
+    )
+Important principles
+- The test describes the business journey.
+- Page objects contain locators and UI interactions.
+- Assertions verify important transitions and final results.
+- Test data can come from fixtures or environment variables.
+- Each E2E test should be independent.
+- Clean up created bookings after the test when possible.
+- Avoid putting every application action into one enormous test.
+Your current demo application cannot yet complete this full journey. It has a login page and courts page, but the Book buttons don’t create a booking, and there is no My Bookings page or booking API. Those features must be implemented before this complete E2E example can pass.
+
+
+
+Day 3 — API/UI Integration
+
+This is where your Day 2 Playwright UI knowledge and Day 3 API knowledge connect.
+
+Suppose the business scenario is:
+
+Customer books Court A from 18:00–20:00 in the UI, and we verify through the API that the booking really exists.
+
+A good flow is:
+
+UI
+→ login / use saved auth
+→ choose Court A
+→ choose 18:00–20:00
+→ click Book
+→ confirmation appears
+
+
+API
+→ GET booking
+→ verify court
+→ verify time
+→ verify status = confirmed
+
+Why do this? Because UI confirmation alone proves only that the frontend displayed success. API validation gives stronger evidence that the backend actually stored the expected booking.
+
+Conceptually in Python Playwright:
+
+def test_booking_ui_and_api(page, api_context):
+
+
+    # UI
+    page.goto("/courts")
+    page.get_by_text("Court A").click()
+    page.get_by_text("18:00").click()
+    page.get_by_role("button", name="Book").click()
+
+
+    expect(
+        page.get_by_text("Booking confirmed")
+    ).to_be_visible()
+
+
+    # API
+    response = api_context.get(
+        "/api/bookings/123"
+    )
+
+
+    assert response.status == 200
+
+
+    body = response.json()
+
+
+    assert body["court"] == "Court A"
+    assert body["startTime"] == "18:00"
+    assert body["status"] == "confirmed"
+
+In a real test, we wouldn't usually hardcode booking ID 123. We'd get it from the UI response, URL, API response, or test setup.
+
+Interview point
+
+If the UI says:
+
+Booking confirmed
+
+but API returns:
+
+404 Not Found
+
+that's a serious consistency problem.
+
+If API shows the booking correctly but UI does not, I'd investigate the frontend/calendar state.
+
+
+Quick interview question
+
+Which approach would you choose for each?
+
+A. Verify the complete customer booking journey.
+B. Prepare an existing booking so you can specifically test cancellation.
+C. Verify that a UI booking really exists in backend data.
+
+Answer with:
+
+A → UI/API?
+B → UI/API?
+C → UI/API combination?
+
+Then we'll move directly to SQL: SELECT / WHERE.
+
+C
+
+For C, yes: UI + API. ✅
+
+You create the booking through UI and verify the backend through API:
+
+UI → create booking
+API → GET booking
+→ verify court/time/status
+
+For completeness:
+
+A → UI E2E, because we're testing the complete customer journey.
+
+B → API setup + UI cancellation, because booking creation is only a prerequisite; cancellation is what we're actually testing.
+
+C → UI + API, exactly as you chose.
+
+That completes API/UI integration. ✅
+
+Your Day 3 checklist is now:
+
+[x] HTTP methods
+[x] Status codes
+[x] Headers/authentication
+[x] JSON
+[x] Postman
+[x] API negative testing
+[x] API/UI integration
+[ ] SELECT / WHERE
+[ ] JOIN
+[ ] GROUP BY / HAVING
+[ ] 15 API scenarios
+[ ] 10 SQL exercises
+
+Day 3 — SQL Part 1: SELECT + WHERE
+
+For a QA Engineer, SQL is usually about validating backend data, not becoming a database developer.
+
+Imagine Bond has a table:
+
+bookings
+id	user_id	court_id	status	price
+101	5	1	confirmed	100
+102	7	2	cancelled	150
+103	5	2	confirmed	200
+104	8	1	pending	100
+
+SQL Exercise #1
+
+Using the table above, write a query:
+
+Find all confirmed bookings belonging to user 5.
+
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT * FROM bookings WHERE user_id = ? AND status = ?", (5, "confirmed")), sep="\n"); db.close()'
+(101, 5, 1, 'confirmed', 100)
+(103, 5, 2, 'confirmed', 200)
+
+
+
+SQL Exercise #2 — WHERE + comparison
+
+Using your bookings table, find:
+
+All confirmed bookings where the price is greater than 100.
+
+Don't use Python this time in your answer—just give me the SQL you'd execute.
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT * FROM bookings WHERE status = ? AND price > ? ", ("confirmed", 100)), sep="\n"); db.close()'
+(103, 5, 2, 'confirmed', 200)
+
+
+
+SQL Exercise #3 — OR
+
+Now find:
+
+All bookings where the status is either cancelled OR pending.
+
+Expected from our sample data:
+
+102 | 7 | 2 | cancelled | 150
+104 | 8 | 1 | pending   | 100
+
+Write/run the query yourself.
+
+After this we'll do one exercise with ORDER BY, then move to JOIN, which is much more important for QA interviews.
+
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT * FROM bookings WHERE status = ? OR status = ? ", ("pending", "cancelled")), sep="\n"); db.close()'
+(102, 7, 2, 'cancelled', 150)
+(104, 8, 1, 'pending', 100)
+
+
+Exercise #4 — ORDER BY
+
+Find all bookings, ordered by price from highest to lowest.
+
+You don't need WHERE this time.
+
+Expected order based on your data:
+
+200
+150
+100
+100
+
+Write/run the query.
+
+Find all bookings, ordered by price from highest to lowest.
+python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT price FROM bookings ORDER BY price DESC"), sep="\n"); db.close()'
+
+#from highest to lowest
+python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT price FROM bookings ORDER BY price ASC"), sep="\n"); db.close()'
+
+
+SQL Part 2 — JOIN
+
+This is especially useful for QA because data is usually split across tables.
+
+Imagine you have:
+
+bookings
+
+id	user_id	court_id	status	price
+101	5	1	confirmed	100
+102	7	2	cancelled	150
+103	5	2	confirmed	200
+104	8	1	pending	100
+
+And another table:
+
+users
+
+id	name	email
+5	Dani	dani@example.com
+7	Alex	alex@example.com
+8	John	john@example.com
+
+
+
+
+
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE
+);
+
+INSERT OR REPLACE INTO users (id, name, email)
+VALUES
+    (5, 'Dani', 'dani@example.com'),
+    (7, 'Alex', 'alex@example.com'),
+    (8, 'John', 'john@example.com');
+
+run this:
+
+python -c 'import sqlite3, pathlib; db=sqlite3.connect("database/bond_sports.db"); db.executescript(pathlib.Path("database/setup_bookings.sql").read_text()); db.commit(); db.close()'
+
+
+verify the users been created:
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT * FROM users"), sep="\n"); db.close()'
+(5, 'Dani', 'dani@example.com')
+(7, 'Alex', 'alex@example.com')
+(8, 'John', 'john@example.com')
+
+Which email address belongs to booking 101?
+
+
+
+python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT bookings.id, bookings.user_id, users.email FROM bookings JOIN users ON bookings.user_id == users.id WHERE bookings.id = ? ", (101,)), sep="\n"); db.close()'
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT bookings.id, bookings.user_id, users.email FROM bookings JOIN users ON bookings.user_id == users.id WHERE bookings.id = ? ", (101,)), sep="\n"); db.close()'
+(101, 5, 'dani@example.com')
+
+
+SELECT
+    b.id,
+    u.email,
+    b.price
+FROM bookings b
+JOIN users u
+    ON b.user_id = u.id
+WHERE b.status = 'confirmed';
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT b.id, b.price, u.email FROM bookings AS b JOIN users AS u ON b.user_id == u.id WHERE b.status = ? ", ("confirmed",)), sep="\n"); db.close()'
+(101, 100, 'dani@example.com')
+(103, 200, 'dani@example.com')
+
+
+
+JOIN Exercise #2 — 3 tables
+
+Return:
+
+booking id
+user email
+court name
+status
+price
+
+using:
+
+bookings
+users
+courts
+
+You’ll need two JOINs:
+
+JOIN users ...
+JOIN courts ...
+
+need to run insert to table: 
+python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); db.execute("CREATE TABLE IF NOT EXISTS courts (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)"); db.executemany("INSERT OR REPLACE INTO courts (id, name) VALUES (?, ?)", [(1, "Court A"), (2, "Court B")]); db.commit(); db.close()'
+
+SELECT
+    b.id,
+    u.email,
+    c.name,
+    b.status,
+    b.price
+FROM bookings AS b
+JOIN users AS u
+    ON b.user_id = u.id
+JOIN courts AS c
+    ON b.court_id = c.id;
+
+
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT * FROM courts"), sep="\n"); db.close()'
+(1, 'Court A')
+(2, 'Court B')
+
+
+PS D:\GitHub\PlaywrightAutomation\ProjectPython> python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT b.id, u.email, c.name, b.status, b.price FROM bookings AS b JOIN users AS u ON b.user_id == u.id JOIN courts AS c ON b.court_id == 
+c.id"), sep="\n"); db.close()'
+(101, 'dani@example.com', 'Court A', 'confirmed', 100)
+(102, 'alex@example.com', 'Court B', 'cancelled', 150)
+(103, 'dani@example.com', 'Court B', 'confirmed', 200)
+(104, 'john@example.com', 'Court A', 'pending', 100)
+
+
+
+SQL Part 3 — GROUP BY / HAVING
+
+Suppose we want to know:
+
+How many bookings does each user have?
+
+We use:
+
+SELECT
+    user_id,
+    COUNT(*) AS booking_count
+FROM bookings
+GROUP BY user_id
+HAVING COUNT(*) > 1;
+
+
+SELECT
+    user_id,
+    COUNT(*) AS booking_count
+FROM bookings
+GROUP BY user_id
+HAVING COUNT(*) > 1;
+
+python -c 'import sqlite3; db=sqlite3.connect("database/bond_sports.db"); print(*db.execute("SELECT bookings.user_id, COUNT(*) AS booking_count FROM bookings GROUP BY bookings.user_id HAVING COUNT(*) > ? ", (1,)), sep="\n"); db.close()'
+
+Important interview question: WHERE vs HAVING
+
+This is something you should know.
+
+WHERE filters individual rows before grouping:
+
+SELECT court_id, COUNT(*)
+FROM bookings
+WHERE status = 'confirmed'
+GROUP BY court_id;
+
+Meaning:
+
+First take only confirmed bookings, then group them.
+
+HAVING filters groups after GROUP BY:
+
+SELECT court_id, COUNT(*)
+FROM bookings
+GROUP BY court_id
+HAVING COUNT(*) > 1;
+
+Meaning:
+
+Group bookings by court, then keep groups with more than one booking.
+
+
+
+Meaning:
+
+Group bookings by court, then keep groups with more than one booking.
+
+Easy memory:
+
+WHERE  → rows
+GROUP BY
+HAVING → groups
+
+Now a quick interview test before we mark this section complete:
+
+Find courts that have more than 1 confirmed booking.
+
+
+
+SELECT
+    court_id,
+    COUNT(*) AS booking_count
+FROM bookings
+WHERE status = 'confirmed'
+GROUP BY court_id
+HAVING COUNT(*) > 1;
+
+
+///////////////15 API Scenarios — Interview Simulation///////////////
+
+
+Instead of making you write 15 long tests, I'll give you scenarios one at a time. You tell me:
+
+method + expected status + what you would validate.
+
+Scenario 1/15 — Create booking
+
+Authenticated customer sends:
+
+POST /api/bookings
+Authorization: Bearer VALID_TOKEN
+{
+    "courtId": 1,
+    "date": "2026-08-25",
+    "startTime": "18:00",
+    "durationHours": 2
+}
+
+Court is available, business rules are satisfied, and the booking is successfully created.
+
+or example, a user books Court A:
+
+POST /api/bookings
+
+
+{
+    "courtId": 1,
+    "date": "2026-08-25",
+    "startTime": "18:00",
+    "durationHours": 2
+}
+
+Everything is valid and Court A is available.
+
+I want you to answer just these three questions:
+
+1. What HTTP status do you expect?
+
+For example:
+
+200? 201? 400? 409?
+
+2. What would you check in the response JSON?
+
+For example, would you check:
+
+booking ID?
+court?
+time?
+status?
+
+3. What else would you check to make sure the booking really happened?
+
+Think about what you've learned: could you verify it through another API, database, or UI/calendar?
+
+Just answer in your own words. No Python or SQL required.
+
+200 2. booking.id and court id 3.we can queru the DB or check in the calendar
+
+Good. 2 and 3 are correct. One correction:
+
+Scenario 1/15
+
+1. Status: Since POST /api/bookings creates a new booking, I'd normally expect:
+
+201 Created
+
+200 could be correct if that's how the actual API contract is designed, but REST convention is 201.
+
+2. Response: Correct. Check at least:
+
+booking.id exists
+courtId == 1
+startTime == "18:00"
+durationHours == 2
+status == "confirmed"
+
+3. Verify it really happened: Exactly. ✅
+
+You could:
+
+GET /api/bookings/{id}
+
+or query the DB, or check the booking in the UI/calendar.
+
+That's the thinking interviewers want: don't trust only the status code.
+
+Scenario 2/15
+
+Now the same customer tries to book:
+
+Court A
+18:00–20:00
+
+but another user has already booked exactly that time.
+
+Same three questions:
+
+Expected HTTP status?
+What would you validate in the response?
+What would you verify did NOT happen in the DB/system?
+
+So a stronger answer is:
+
+1. Status: 409 Conflict
+2. Response: validate an error message/code indicating the slot is already occupied.
+3. Data: verify no second booking was created in the DB and the original booking remains unchanged.
+
+I would not expect 200 here, because that would suggest success. 400 is less precise than 409 for a booking conflict.
+
+
+Scenario 3/15
+
+User sends a valid booking request, but does not send an authentication token.
+
+Same three questions:
+
+Expected status?
+What would you validate in the response?
+What should not happen in the DB/system?
+
+status 401 2. responce validate 401-404 depend on implementation and error " unauthorize" 3. DB system should not be changed
+
+Good. 1 and 3 are correct. One correction for #2: if the request is missing authentication, the expected response should normally stay in the 401 family according to the API contract—not 404.
+
+A strong answer is:
+
+1. Status: 401 Unauthorized
+2. Response: validate the error body, for example "Unauthorized" or "Authentication required", and make sure no token/user data is returned.
+3. Data: verify no booking was created and nothing changed in the database.
+
+Scenario 4/15
+
+Authenticated customer tries to create a booking with:
+
+startTime = 20:00
+durationHours = 3
+
+but the facility closes at 22:00.
+
+What do you expect for:
+
+HTTP status
+Response validation
+Database/system validation
+
+HTTP status 4XX might be 404 2.Responce should include CAN not be booked crossed working hours 3.DB booking should not be created
+
+Your QA logic for #2 and #3 is correct. The status code needs work.
+
+Scenario 4/15 — Result
+
+1. HTTP status: ❌ Not 404.
+
+404 means:
+
+The requested resource doesn't exist.
+
+But the court/facility does exist. The problem is the booking data violates a business rule:
+
+Requested: 20:00 → 23:00
+Facility:  08:00 → 22:00
+
+Depending on the API contract, I'd expect:
+
+400 Bad Request
+
+or:
+
+422 Unprocessable Content
+
+For an interview, say:
+
+“I'd expect 400 or 422, depending on the API contract, because the requested booking exceeds facility operating hours.”
+
+2. Response: ✅ Something like:
+
+{
+    "error": "Booking exceeds facility operating hours"
+}
+
+You could also validate an error code if the API provides one.
+
+3. DB: ✅ Exactly.
+
+No booking created
+No existing booking modified
+Important pattern I'm noticing
+
+Your QA reasoning is strong, but you're still mixing up some 4xx codes.
+
+400/422 → My INPUT/data is invalid
+401     → I'm not authenticated
+403     → I'm authenticated but not allowed
+404     → The RESOURCE doesn't exist
+409     → My request CONFLICTS with existing state
+
+
+Scenario 5/15
+
+Authenticated user requests:
+
+GET /api/courts/9999
+
+Court 9999 doesn't exist.
+
+HTTP status?
+What would you validate in the response?
+Does anything need to change in the DB?
+
+404 resource does not exist 2. Validate status 404 and correct message 3. In DB not created or changed in court id
+
+Exactly. 3/3. ✅
+
+For Scenario 5:
+
+Status: 404 Not Found
+Response: validate 404 plus an error body like "Court not found"
+DB: no changes should happen, because this is a read request
+
+Tiny wording improvement: since this is a GET, I’d say “DB should remain unchanged” rather than “not created or changed in court id.”
+
+
+Scenario 6/15
+
+Authenticated user tries:
+
+POST /api/bookings
+
+with:
+
+{
+  "courtId": 1,
+  "date": "2026-08-25",
+  "startTime": "18:00",
+  "durationHours": 0
+}
+
+Minimum duration is 1 hour.
+
+What do you expect for:
+
+HTTP status
+Response validation
+DB/system validation
+
+
+
+400 cause not allowed 0 hours 2. 404 validation and correct message: Min order is one hour 3.DB should no be created new order for this court and slot + no payment
+
+Good overall. #1 and #3 are right. One correction in #2: you wrote 404 validation, but this should stay a 400/422 validation error, not 404.
+
+A strong answer would be:
+
+1. Status: 400 Bad Request or 422 Unprocessable Content, depending on the API contract.
+2. Response: validate the error message/code, e.g. "Minimum booking duration is 1 hour".
+3. Data: verify no booking is created, no slot is reserved, and no payment is initiated.
+
+That last point about no payment is good — you're thinking about side effects, not only the booking row.
+
+
+Scenario 7/15
+
+Authenticated customer sends:
+
+POST /api/bookings
+
+with a valid court/date/time, but durationHours = 4.
+
+Maximum allowed is 3 hours.
+
+What do you expect for:
+
+HTTP status
+Response validation
+DB/system validation
+
+
+https status 400 or 422 invalid data (i think if max is 3 hours user shoudl have drop down box and there should not be 4 hours option) 2. responce validation 422 and message not allowed to book 4 hours for one slot 3.Should not be added this slot in the DB and not created payment
+
+Yes — this is a strong answer. 9/10.
+
+Your best point is actually the UI observation:
+
+If the maximum is 3 hours, the UI should probably prevent selecting 4 hours.
+
+That’s good QA thinking. But the API must still validate it, because users or other clients can bypass the UI and call the endpoint directly.
+
+So the expected result is:
+
+1. Status: 400 or 422 depending on the API contract.
+2. Response: validate an error like "Maximum booking duration is 3 hours" and the expected error code/field if provided.
+3. Side effects: no booking created, no slot reserved, no payment started.
+
+This is an important principle:
+
+Frontend validation improves UX; backend validation protects the system.
+
+
+
+Scenario 8/15
+
+Authenticated customer sends a booking request with:
+
+{
+  "courtId": 1,
+  "date": "2025-08-25",
+  "startTime": "18:00",
+  "durationHours": 2
+}
+
+Assume that date is in the past.
+
+What do you expect for:
+
+HTTP status
+Response validation
+DB/system validation
+
+
+400 or 422 input data is not allowed 2.responce 400 and validate message Not allowed book in the past 3.should not be created any booking and payment in for the past booking
+
+Correct. ✅
+
+For Scenario 8:
+
+Status: 400 or 422 depending on the API contract.
+Response: validate the error body, e.g. "Booking date cannot be in the past".
+Side effects: no booking, no slot reservation, no payment.
+
+You’re getting much more consistent with the 4xx logic now.
+
+Scenario 9/15
+
+Authenticated customer tries to cancel another user's booking:
+
+POST /api/bookings/123/cancel
+
+Booking 123 exists, but belongs to a different customer.
+
+What do you expect for:
+
+HTTP status
+Response validation
+DB/system validation
+
+
+
+no authorize action 403 2. rsponce validate 403 and message can not cancel booking for different account 3.booking should not be canceled for different customer belongs to the booking 4.no payment back to the user or trying to cancel user
+
+Exactly right. 9/10.
+
+For Scenario 9:
+
+1. Status: 403 Forbidden because the user is authenticated, but not authorized to cancel someone else’s booking.
+2. Response: validate 403 plus a clear error message such as "You are not allowed to cancel this booking".
+3. Data: booking status must remain unchanged.
+4. Financial side effects: no refund and no payment reversal should be triggered.
+
+Your added payment check is good because it tests side effects.
+
+
+Scenario 10/15
+
+A customer has a booking more than 24 hours away and cancels it successfully.
+
+According to the rule, the customer should receive a full refund.
+
+What would you validate for:
+
+HTTP status
+Response body
+Booking data
+Payment/refund data
+
+
+201 success to the canceled 2.responce body validate https status 201 and message about cancelation (migth be refund mention) 3.Booking data should be user id booking id slot id paiment method , time 4. refund data validate refund happen to the customer db validation and account $ check
+
+Good answer overall. The main correction is the status code.
+
+For a cancellation endpoint like:
+
+POST /api/bookings/123/cancel
+
+I would normally expect 200 OK if the cancellation completes immediately. 201 Created is usually used when a new resource is created. A refund record might be created internally, but the cancellation request itself would still commonly return 200 unless the API contract says otherwise.
+
+A stronger answer would be:
+
+1. Status: 200 OK for successful cancellation.
+2. Response: validate booking ID, status such as cancelled, and refund information if the API returns it.
+3. Booking data: booking 123 should now be cancelled, the correct user/court/time should remain associated with it, and the slot should become available again.
+4. Refund: verify a full refund was created for the correct payment/amount, refund status is correct, and there is no duplicate refund.
+
+One important nuance: checking the customer’s actual account balance may not always be immediately possible because external payment refunds can be asynchronous. In that case, you validate that your system successfully created the refund request/record and later verify its final status.
+
+
+Scenario 11/15
+
+Same booking, but this time the customer cancels less than 24 hours before the booking. The requirement says cancellation is allowed, but no refund should be issued.
+
+What would you validate for:
+
+HTTP status
+Response body
+Booking state
+Payment/refund state
+
+
+not allowed action or 409 - conflict with existing state 2.Body 409 validation , validation not canceled slot,id slot and user id are correct 3. bookign state should no be changed DB sa well no change no refund
+
+There’s one important correction: based on the requirement we defined earlier, cancellation is allowed less than 24 hours before the booking; only the refund is not allowed.
+
+So this should not be 409, and the booking should not remain unchanged.
+
+A stronger answer is:
+
+1. Status: usually 200 OK because the cancellation succeeds.
+2. Response: validate booking ID, status = cancelled, and ideally a field/message indicating refund = 0 or not eligible for refund.
+3. Booking state: booking should change to cancelled, and the slot should become available again.
+4. Payment/refund: original payment remains recorded, but no refund transaction should be created.
+
+This is exactly why requirements matter so much. If the requirement instead said, “Bookings cannot be cancelled less than 24 hours before start time,” then your 409/rejection idea could make sense depending on the API contract.
+
+
+Scenario 12/15
+
+Customer cancels a booking exactly 24 hours before its start time.
+
+The requirement says:
+
+full refund if cancelled at least 24 hours before.
+
+What should happen?
+
+Give me:
+
+HTTP status
+Booking state
+Refund state
+Why this is an important test.
+
+
+200 OK can be canceled and refunded no issue 2. booking state changed to free again 3.refund hapen to the customer 4. cause it exaclty the boundary
+
+Exactly. ✅ That’s a good answer.
+
+I’d phrase it slightly more precisely:
+
+1. Status: 200 OK — cancellation succeeds.
+2. Booking state: booking becomes cancelled and the slot becomes available again.
+3. Refund state: full refund should be created because “at least 24 hours” includes exactly 24 hours.
+4. Why important: it tests the exact business-rule boundary.
+
+That’s a classic boundary-value test.
+
+
+
+Scenario 13/15
+
+Authenticated user sends:
+
+POST /api/bookings
+
+with a valid court and time, but the courtId exists and is currently marked inactive/disabled.
+
+What would you expect for:
+
+HTTP status
+Response validation
+DB/system validation
+
+
+
+404 can be resource is not active 2. 404 validation and validate correct message "Slot is unvailable or disabled" validate notcreated a booking fo this slot 3. DB now new slot created or canceled the disabled status
+
+Close. The main question is whether inactive means “does not exist” or “exists but cannot be booked.”
+
+Because the court does exist but is disabled, I would usually expect 400/422 for a business-rule validation failure, or possibly 409 depending on the API design. 404 would be more appropriate if the API intentionally hides inactive resources as not found.
+
+A stronger answer is:
+
+1. Status: 400 or 422 depending on the contract.
+2. Response: validate an error like "Court is inactive and cannot be booked".
+3. DB/system: no booking should be created, no payment should start, and the court should remain inactive.
+
+One correction to your last sentence: the failed booking request should not change the court’s disabled status. The request is only trying to book it.
+
+Scenario 14/15
+
+Two authenticated users send the same booking request for Court A, 18:00–20:00 at almost the same time.
+
+What should happen for:
+
+First request
+Second request
+Database state
+Why this scenario is important?
+
+201 for first request 2. 409 - conflict with existing state for second request 3. database creaetd row for first user nad not for second 4. raise condition can happen we do not want two user book the same slot or additional issues with part of one data from one user and second data mix
+
+Exactly. This is a strong answer — 9.5/10.
+
+You identified the important concurrency behavior:
+
+User A → POST booking → 201 Created
+User B → same slot → 409 Conflict
+
+The database should contain only one valid booking for that court/time, and there should be no partial or mixed data between the two requests.
+
+The interview term to remember is race condition. Your answer can be phrased as:
+
+“This is a race-condition/concurrency scenario. I expect only one request to succeed and the second to fail with 409 Conflict. I would verify that only one booking exists in the database, no duplicate payment is created, and data from the two users is not mixed.”
+
+That’s exactly the kind of business-critical test a booking platform needs.
+
+
+
+Scenario 15/15 — Final API scenario
+
+A customer sends the same valid booking request twice very quickly, for example because they double-click the Book button.
+
+What would you expect for:
+
+First request
+Second request
+Database state
+Payment state
+What kind of problem are we trying to prevent?
+
+201 for the first request 2. second request shoul get 409 conflict 3.Database should create only one booking order 4. payment only once 5.trying to check if server can do a lock for order and not allow multiple atomic commands for oredering and payment
+
+Exactly. That’s a very good final API scenario answer.
+
+The key concepts are:
+
+first request succeeds → typically 201 Created
+second duplicate request should not create another booking
+database should contain one booking
+payment should happen once
+the backend should protect against duplicate/concurrent requests
+
+The terms you can use in an interview are idempotency, atomicity, transaction safety, and duplicate request protection. A lock can be one implementation, but as QA you don’t need to prescribe the backend solution unless asked.
+
+A polished interview answer would be:
+
+“I expect the first request to create the booking successfully. The second duplicate request should be rejected or handled idempotently so that only one booking exists. I would verify there is only one booking row and only one payment transaction. This protects against race conditions, duplicate submissions, and double charging.”
+
+Day 3 status
+
+You’ve now completed the 15 API scenarios. ✅
+
+Remaining:
+
+[x] HTTP methods
+[x] Status codes
+[x] Headers/authentication
+[x] JSON
+[x] Postman
+[x] API negative testing
+[x] API/UI integration
+[x] SELECT / WHERE
+[x] JOIN
+[x] GROUP BY / HAVING
+[x] Complete 15 API scenarios
+[ ] Complete 10 SQL exercises
+
+You’ve already done several SQL exercises during the day, so we don’t need 10 more from zero. We should finish Day 3 with a short SQL interview drill of 4–5 questions, then Day 3 is complete.
+

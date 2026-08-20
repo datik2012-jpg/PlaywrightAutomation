@@ -15,6 +15,12 @@ const demoUser = {
   password: '1234567',
 };
 
+const apiToken = 'demo-api-token';
+const courts = [
+  { id: 1, name: 'Court A', status: 'Available', time: '18:00' },
+  { id: 2, name: 'Court B', status: 'Available', time: '18:00' },
+];
+
 function sendJson(response, status, body) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(body));
@@ -65,9 +71,30 @@ function handleLoginApi(request, response) {
 
     sendJson(response, 200, {
       success: true,
-      token: 'demo-api-token',
+      token: apiToken,
       user: { email: demoUser.email },
     });
+  });
+}
+
+function handleCourtsApi(request, response) {
+  if (request.method !== 'GET') {
+    response.writeHead(405, {
+      Allow: 'GET',
+      'Content-Type': 'application/json; charset=utf-8',
+    });
+    response.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
+  }
+
+  if (request.headers.authorization !== `Bearer ${apiToken}`) {
+    sendJson(response, 401, { error: 'Unauthorized' });
+    return;
+  }
+
+  sendJson(response, 200, {
+    success: true,
+    courts,
   });
 }
 
@@ -76,6 +103,11 @@ const server = http.createServer((request, response) => {
 
   if (pathname === '/api/login') {
     handleLoginApi(request, response);
+    return;
+  }
+
+  if (pathname === '/api/courts') {
+    handleCourtsApi(request, response);
     return;
   }
 
